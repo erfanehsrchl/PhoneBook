@@ -1,187 +1,351 @@
 # PhoneBook
 
-## Overview
+## Project Overview
 
-PhoneBook is a RESTful API built as a .NET interview exercise. It demonstrates Domain-Driven Design fundamentals, Clean Architecture, CQRS, Value Objects, application exceptions, thread-safe in-memory persistence, atomic phone-number uniqueness, snapshot isolation, FluentValidation, consistent API response envelopes, and integration testing. The solution is intentionally designed to demonstrate architectural and engineering practices while keeping the persistence model in memory, as required by the exercise; it is not presented as a production-ready service.
+PhoneBook is a REST API for managing contacts, built as a technical interview assignment. The project demonstrates Clean Architecture, Domain-Driven Design, CQRS, MediatR pipeline behaviors, FluentValidation, Mapster-based object mapping, a thread-safe in-memory repository, consistent API responses, and automated tests across the main architectural layers.
+
+The main goal is to show a maintainable backend design where business rules live in the Domain layer, use cases live in the Application layer, technical details live in Infrastructure, and HTTP concerns remain in the API project.
 
 ## Features
 
-- Create, update, delete, and retrieve a Contact by ID.
-- List all Contacts with pagination.
-- Filter Contacts by Tag with pagination.
-- Normalize supported Iranian mobile-number formats to a canonical `+989xxxxxxxxx` representation.
-- Enforce canonical phone-number uniqueness atomically.
-- Record UTC creation and update timestamps.
-- Validate application inputs and domain invariants.
+- Create a contact.
+- Update an existing contact.
+- Delete a contact.
+- Get a contact by ID.
+- List contacts with deterministic pagination.
+- Filter contacts by tag with deterministic pagination.
+- Validate contact input before handlers execute.
+- Normalize supported Iranian mobile phone number formats to canonical `+989xxxxxxxxx` format.
+- Enforce unique canonical phone numbers.
+- Store creation and update timestamps in UTC.
 - Return consistent success and error response contracts.
 - Expose Swagger/OpenAPI in the Development environment.
-- Verify behavior with domain, application, infrastructure, concurrency, and HTTP integration tests.
-
-## Architecture
-
-The Domain project contains the model and rules without framework dependencies. Application contains CQRS use cases, validation, application exceptions, and the repository abstraction. Infrastructure implements persistence. Api owns HTTP contracts, maps exceptions to HTTP, and acts as the composition root that wires Application and Infrastructure.
-
-```text
-Api
- ├─> Application ─> Domain
- └─> Infrastructure ─> Application abstractions
-                       └─> Domain
-```
-
-Dependencies point inward; Domain does not depend on MediatR, FluentValidation, persistence, or ASP.NET Core.
-
-## Project Structure
-
-```text
-src/
-  PhoneBook.Domain/                 Domain model and Value Objects
-  PhoneBook.Application/            CQRS requests, handlers, validation, and abstractions
-  PhoneBook.Infrastructure/         Thread-safe in-memory repository implementation
-  PhoneBook.Api/                    ASP.NET Core controllers, contracts, and HTTP error mapping
-tests/
-  PhoneBook.Domain.UnitTests/       Domain behavior tests
-  PhoneBook.Application.UnitTests/  Validator, pipeline, and handler tests
-  PhoneBook.Infrastructure.UnitTests/ Repository and concurrency tests
-  PhoneBook.Api.IntegrationTests/   End-to-end HTTP tests using WebApplicationFactory
-docs/                               Architecture decisions and API examples
-.github/workflows/                  Continuous integration workflow
-```
+- Run with the local .NET SDK or the included Dockerfile.
+- Verify behavior through domain, application, infrastructure, concurrency, and HTTP integration tests.
 
 ## Technology Stack
 
-- .NET SDK 9.0.102 and .NET/ASP.NET Core 9 (`net9.0`)
-- MediatR 14.2.0
-- FluentValidation 12.1.1
-- Swashbuckle.AspNetCore 10.2.3
-- xUnit 2.9.2 and FluentAssertions 8.10.0
-- Microsoft.AspNetCore.Mvc.Testing 9.0.10
-- Coverlet collector 6.0.4
+- .NET 9 / ASP.NET Core 9
+- ASP.NET Core MVC Controllers
+- Clean Architecture
+- Domain-Driven Design
+- CQRS
+- MediatR
+- FluentValidation
+- Mapster
+- Swashbuckle.AspNetCore
+- xUnit
+- FluentAssertions
+- NSubstitute
+- Microsoft.AspNetCore.Mvc.Testing
+- Coverlet collector
+- Thread-safe in-memory repository
+- Dockerfile for containerized execution
 
-## Domain Model
+## Architecture
 
-`Contact` is the Aggregate Root. `ContactId`, `FirstName`, `LastName`, `PhoneNumber`, and `Tag` are Value Objects. `PhoneNumber` owns supported-format normalization and Iranian mobile-number validation. `Contact` controls state transitions and keeps creation/update timestamps consistent. `Tag` is intentionally a Value Object because it has no independent identity or lifecycle in this exercise.
+The solution follows Clean Architecture. Dependencies point inward: API depends on Application and Infrastructure, Infrastructure depends on Application abstractions and Domain, Application depends on Domain, and Domain depends on no other solution project.
 
-## Application Flow
+- **API** owns HTTP controllers, request/response contracts, Swagger, exception-to-HTTP mapping, and composition root configuration.
+- **Application** owns use cases, commands, queries, handlers, validators, mapping configuration, application exceptions, pipeline behaviors, and repository abstractions.
+- **Domain** owns the `Contact` aggregate, value objects, entity abstractions, and business invariants.
+- **Infrastructure** owns the in-memory implementation of application persistence abstractions.
 
-```text
-HTTP request
-  -> API contract
-  -> MediatR command/query
-  -> ValidationBehavior
-  -> Handler
-  -> Domain
-  -> Repository
-  -> Application response or exception
-  -> HTTP response
+```mermaid
+flowchart LR
+    Client[HTTP Client] --> Api[PhoneBook.Api]
+    Api --> Application[PhoneBook.Application]
+    Api --> Infrastructure[PhoneBook.Infrastructure]
+    Infrastructure --> Application
+    Application --> Domain[PhoneBook.Domain]
+    Infrastructure --> Domain
 ```
 
-FluentValidation and explicit application exceptions represent expected failures. The global exception handler maps them to stable API contracts, while logging unexpected failures and returning a safe generic response.
+```mermaid
+flowchart BT
+    Domain[Domain<br/>No solution dependencies]
+    Application[Application<br/>Use cases and abstractions]
+    Infrastructure[Infrastructure<br/>Persistence implementation]
+    Api[API<br/>HTTP and composition root]
 
-## API Endpoints
+    Application --> Domain
+    Infrastructure --> Application
+    Infrastructure --> Domain
+    Api --> Application
+    Api --> Infrastructure
+```
 
-| Method | Route | Success |
-| --- | --- | --- |
-| `POST` | `/api/contacts` | `201 Created` |
-| `GET` | `/api/contacts/{id}` | `200 OK` |
-| `GET` | `/api/contacts?pageNumber={pageNumber}&pageSize={pageSize}` | `200 OK` |
-| `GET` | `/api/contacts/by-tag/{tag}?pageNumber={pageNumber}&pageSize={pageSize}` | `200 OK` |
-| `PUT` | `/api/contacts/{id}` | `200 OK` |
-| `DELETE` | `/api/contacts/{id}` | `204 No Content` |
+## Solution Structure
 
-List endpoints default to page 1 with 20 items and accept page sizes from 1 through 100. Common failures are `400` for validation, `404` for missing contacts, `409` for uniqueness conflicts, `422` for other expected business failures, and `500` for unexpected errors. Except for successful `204 No Content` deletion, responses use `ApiResponse<T>` for success or `ApiResponse` for errors. See [API examples](docs/api-examples.md) for complete samples.
+```text
+PhoneBook.sln
+src/
+  PhoneBook.Domain/
+    Contacts/
+    Abstractions/
+  PhoneBook.Application/
+    Abstractions/Persistence/
+    Behaviors/
+    Common/
+    Contacts/
+  PhoneBook.Infrastructure/
+    Persistence/
+  PhoneBook.Api/
+    Contracts/
+    Controllers/
+    ExceptionHandling/
+    Mappings/
+tests/
+  PhoneBook.Domain.UnitTests/
+  PhoneBook.Application.UnitTests/
+  PhoneBook.Infrastructure.UnitTests/
+  PhoneBook.Api.IntegrationTests/
+docs/
+  architecture-decisions.md
+```
 
-## Running Locally
+- **PhoneBook.Domain** exists to model contact behavior and protect business rules without framework dependencies.
+- **PhoneBook.Application** exists to coordinate use cases through CQRS messages, handlers, validators, mapping, and persistence contracts.
+- **PhoneBook.Infrastructure** exists to provide the in-memory repository implementation behind the Application abstraction.
+- **PhoneBook.Api** exists to expose the application through REST endpoints and configure the runtime.
+- **PhoneBook.Domain.UnitTests** verifies value objects, aggregate behavior, and domain invariants.
+- **PhoneBook.Application.UnitTests** verifies validators, pipeline behavior, and handlers.
+- **PhoneBook.Infrastructure.UnitTests** verifies repository behavior, pagination, uniqueness, snapshot isolation, and concurrency.
+- **PhoneBook.Api.IntegrationTests** verifies real HTTP behavior through `WebApplicationFactory`.
 
-Prerequisite: the .NET 9 SDK compatible with `global.json`.
+```mermaid
+flowchart TD
+    Root[PhoneBook]
+    Root --> Src[src]
+    Root --> Tests[tests]
+    Root --> Docs[docs]
+    Src --> Domain[PhoneBook.Domain]
+    Src --> Application[PhoneBook.Application]
+    Src --> Infrastructure[PhoneBook.Infrastructure]
+    Src --> Api[PhoneBook.Api]
+    Tests --> DomainTests[Domain.UnitTests]
+    Tests --> ApplicationTests[Application.UnitTests]
+    Tests --> InfrastructureTests[Infrastructure.UnitTests]
+    Tests --> ApiTests[Api.IntegrationTests]
+```
+
+## Request Flow
+
+A request enters through an API controller, is mapped to an Application command or query with Mapster, is sent through MediatR, is validated by the validation pipeline, and is handled by a use-case handler. Handlers use the repository abstraction, create or update domain objects when needed, and return response DTOs. Expected exceptions are converted to stable API responses by the global exception handler.
+
+```text
+Controller -> Mapster -> MediatR -> ValidationBehavior -> Handler -> Repository -> Domain -> Response
+```
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Controller
+    participant Mapster
+    participant MediatR
+    participant Validation as ValidationBehavior
+    participant Handler
+    participant Repository
+    participant Domain
+
+    Client->>Controller: HTTP request
+    Controller->>Mapster: Adapt request to command/query
+    Controller->>MediatR: Send command/query
+    MediatR->>Validation: Execute validators
+    Validation->>Handler: Continue when valid
+    Handler->>Domain: Create/update/validate aggregate
+    Handler->>Repository: Read or persist contact
+    Repository->>Domain: Rehydrate stored snapshots
+    Handler->>Mapster: Adapt domain model to response DTO
+    Controller->>Client: HTTP response
+```
+
+## CQRS
+
+CQRS separates write operations from read operations. This keeps each use case small, explicit, and easy to test.
+
+- **Commands** change state: `CreateContactCommand`, `UpdateContactCommand`, and `DeleteContactCommand`.
+- **Queries** read state: `GetContactByIdQuery`, `GetContactsQuery`, and `GetContactsByTagQuery`.
+- **Handlers** contain the application flow for one command or query and depend on abstractions such as `IContactRepository`.
+
+## Domain Design
+
+`Contact` is the aggregate root. It owns the contact state and exposes controlled creation, update, and rehydration paths.
+
+The aggregate uses these value objects:
+
+- `ContactId`
+- `FirstName`
+- `LastName`
+- `PhoneNumber`
+- `Tag`
+
+Domain rules include required names, required tag, maximum text length of 100 characters, non-empty contact IDs, valid Iranian mobile phone numbers, UTC timestamps, and update timestamps that cannot be earlier than creation timestamps. `PhoneNumber` normalizes supported local and international formats. `Tag` compares case-insensitively.
+
+```mermaid
+classDiagram
+    class Contact {
+        +ContactId Id
+        +FirstName FirstName
+        +LastName LastName
+        +PhoneNumber PhoneNumber
+        +Tag Tag
+        +DateTime CreatedAtUtc
+        +DateTime? UpdatedAtUtc
+        +Create()
+        +Update()
+        +Rehydrate()
+    }
+    class ContactId
+    class FirstName
+    class LastName
+    class PhoneNumber
+    class Tag
+    Contact *-- ContactId
+    Contact *-- FirstName
+    Contact *-- LastName
+    Contact *-- PhoneNumber
+    Contact *-- Tag
+```
+
+## Repository Pattern
+
+`IContactRepository` belongs to the Application layer because application use cases define the persistence operations they need. Infrastructure implements that abstraction with `InMemoryContactRepository`.
+
+The repository is registered as a singleton and protects its internal dictionaries with a single lock. The contact store and canonical phone-number index are checked and mutated within the same synchronization boundary, so phone-number uniqueness is atomic inside the process.
+
+The repository stores immutable snapshots and rehydrates new `Contact` instances on reads. This prevents accidental mutation of persisted state without calling `UpdateAsync`.
+
+## Validation
+
+FluentValidation validates Application commands and queries before handlers run. Validators are discovered from the Application assembly and executed by `ValidationBehavior<TRequest, TResponse>`, a MediatR pipeline behavior.
+
+Input validation covers required fields, maximum lengths, non-empty IDs, valid phone numbers, and pagination ranges. Business invariants are still enforced in the Domain layer, and atomic uniqueness is enforced in the repository because it must be checked and written under one lock.
+
+## Mapping
+
+Mapster is used for object-to-object mappings between API contracts, Application messages, paged responses, domain objects, and response DTOs. Mapping rules are implemented with `IRegister` classes:
+
+- `PhoneBook.Application.Common.Mappings.ContactMappingConfig`
+- `PhoneBook.Api.Mappings.ApiMappingConfig`
+
+The Application dependency injection configuration scans mapping assemblies into `TypeAdapterConfig.GlobalSettings`, and code uses the direct Mapster style:
+
+```csharp
+contact.Adapt<ContactResponse>();
+```
+
+## Exception Handling
+
+The API uses `GlobalExceptionHandler` to convert expected failures into consistent HTTP responses.
+
+- `ValidationException` becomes `400 Bad Request` with `ValidationApiResponse`.
+- `NotFoundException` becomes `404 Not Found`.
+- `ConflictException` becomes `409 Conflict`.
+- `BusinessRuleException` becomes `422 Unprocessable Entity`.
+- Unexpected exceptions are logged and become `500 Internal Server Error`.
+
+Success responses use `ApiResponse<T>` except for successful deletes, which return `204 No Content`. Error responses use `ApiResponse` or `ValidationApiResponse`.
+
+```mermaid
+flowchart TD
+    Request[HTTP Request] --> Controller
+    Controller --> MediatR
+    MediatR --> Validation{Valid?}
+    Validation -- No --> ValidationException[ValidationException]
+    Validation -- Yes --> Handler
+    Handler --> Expected{Expected failure?}
+    Expected -- Not found --> NotFound[NotFoundException]
+    Expected -- Duplicate phone --> Conflict[ConflictException]
+    Expected -- Other business rule --> Business[BusinessRuleException]
+    Expected -- No --> Success[ApiResponse or 204]
+    ValidationException --> ExceptionHandler[GlobalExceptionHandler]
+    NotFound --> ExceptionHandler
+    Conflict --> ExceptionHandler
+    Business --> ExceptionHandler
+    ExceptionHandler --> ErrorResponse[Stable error response]
+```
+
+## Dependency Injection
+
+`PhoneBook.Api` is the composition root. It registers controllers, Swagger, Application services, Infrastructure services, and exception handling.
+
+Application registration adds MediatR handlers, FluentValidation validators, the validation pipeline behavior, and Mapster configuration. Infrastructure registration maps `IContactRepository` to `InMemoryContactRepository`.
+
+The code injects abstractions such as `ISender` and `IContactRepository` instead of concrete implementations. This keeps handlers testable and prevents Application from depending on Infrastructure.
+
+## Pagination
+
+List endpoints accept `pageNumber` and `pageSize`. If query values are omitted, API mapping applies defaults of page `1` and size `20`. Validation requires page number to be at least `1` and page size to be between `1` and `100`.
+
+Repository results are ordered by `CreatedAtUtc` and then by `ContactId`, which keeps pagination deterministic.
+
+## Testing
+
+The solution has focused tests for each layer:
+
+- **Domain unit tests** verify value objects, `Contact` creation, updates, auditing, timestamp rules, and normalization.
+- **Application unit tests** verify validators, MediatR validation behavior, handlers, cancellation token forwarding, mapping, and application exceptions.
+- **Infrastructure unit tests** verify repository CRUD behavior, duplicate phone handling, snapshot isolation, deterministic pagination, tag filtering, and concurrency.
+- **API integration tests** verify HTTP endpoints, response envelopes, validation errors, exception handling, and integration with the real ASP.NET Core host.
+
+## Running the Project
+
+Prerequisite: .NET SDK `9.0.102` or a compatible latest patch version, as defined in `global.json`.
 
 ```bash
 dotnet restore
 dotnet build
 dotnet run --project src/PhoneBook.Api
+dotnet test
 ```
 
-Use the URL printed by ASP.NET Core at startup and open `/swagger`. Swagger is available only in the Development environment.
+Swagger is available at `/swagger` when the application runs in the Development environment.
 
-## Running with Docker
+The included Dockerfile can also build and run the API:
 
 ```bash
 docker build -t phonebook-api .
 docker run --rm -p 8080:8080 phonebook-api
 ```
 
-The container defaults to the Production environment, where Swagger is disabled. To enable it for local container exploration:
+## Design Decisions
 
-```bash
-docker run --rm -p 8080:8080 -e ASPNETCORE_ENVIRONMENT=Development phonebook-api
-```
+- **Clean Architecture:** keeps business rules independent from HTTP and persistence details.
+- **DDD:** models contact behavior through an aggregate root and value objects instead of primitive-only logic.
+- **CQRS:** keeps read and write use cases explicit and independently testable.
+- **MediatR:** centralizes command/query dispatch and enables pipeline behaviors such as validation.
+- **FluentValidation:** keeps input validation declarative and separate from handlers.
+- **Mapster:** provides lightweight, explicit object mapping with `IRegister` configuration and `Adapt<T>()` usage.
+- **In-memory repository:** satisfies the interview scope without adding database setup.
+- **Application-owned repository abstraction:** lets use cases define their persistence needs while Infrastructure supplies the implementation.
+- **Global exception handler:** keeps controllers focused on HTTP orchestration and centralizes error contracts.
+- **Snapshot-based repository reads:** prevents accidental mutation of stored state.
+- **Atomic phone uniqueness:** prevents duplicate canonical phone numbers inside the process.
 
-The API is then reachable over HTTP at `http://localhost:8080`; Swagger is at `/swagger` when Development is enabled.
+## Future Improvements
 
-## Running Tests
+Production-ready evolution could include:
 
-```bash
-dotnet test
-```
+- EF Core persistence.
+- PostgreSQL with migrations and database-level unique constraints.
+- Authentication.
+- Authorization policies.
+- Docker Compose or orchestration-ready deployment configuration.
+- Redis or another distributed cache.
+- Structured logging.
+- OpenTelemetry tracing and metrics.
+- Health checks.
+- More detailed Swagger examples and API metadata.
+- Background jobs.
+- Rate limiting.
+- Cursor-based pagination for larger datasets.
+- Persistent audit trail.
+- CI coverage reporting and quality gates.
 
-The suite covers domain rules, application validators and handlers, repository snapshot/concurrency behavior, and real HTTP requests through ASP.NET Core's integration-test host.
+## Trade-offs
 
-## Code Coverage
+This project intentionally keeps persistence in memory to stay focused on architecture and use-case behavior. Data is process-local and lost on restart. The repository provides thread safety inside one application process, not distributed consistency.
 
-Each test project uses the Coverlet collector. Generate Cobertura coverage files under ignored `TestResults` directories with:
+Authentication, authorization, durable storage, caching, observability, and deployment orchestration are intentionally limited or absent because they are outside the current interview task scope. The design leaves clear extension points for those concerns without coupling them to the Domain or Application layers.
 
-```bash
-dotnet test --collect:"XPlat Code Coverage"
-```
-
-No coverage threshold is enforced.
-
-## Important Design Decisions
-
-- **Application exceptions:** expected use-case and persistence failures use explicit exception types with stable error codes.
-- **Contact Aggregate Root:** Contact controls its state transitions and invariants.
-- **Value Objects:** primitive values with domain meaning are explicit types.
-- **Repository interface location:** `IContactRepository` belongs to Application because use cases depend on it.
-- **In-memory persistence:** the exercise does not require a database.
-- **Snapshot isolation:** persistence stores immutable snapshots, not mutable aggregate references.
-- **Atomic uniqueness:** contact and phone-index mutations share one synchronization boundary.
-- **Mandatory CancellationToken:** asynchronous application and repository boundaries require an explicit token.
-- **No Generic Repository:** the contract expresses Contact-specific use cases.
-- **No Unit of Work:** there is no deferred persistence or multi-repository transaction boundary.
-- **No AutoMapper:** the small mappings remain explicit.
-- **Audit abstraction:** Contact implements `IAuditableEntity` without imposing audit fields on every Entity.
-- **UTC timestamps:** create and update handlers capture `DateTime.UtcNow` once per operation.
-
-Further rationale is recorded in [Architecture Decisions](docs/architecture-decisions.md).
-
-## Concurrency and Thread Safety
-
-`InMemoryContactRepository` is registered as a Singleton, and its state belongs to that repository instance; there is no static mutable state. Contact storage and the canonical phone-number index are checked and changed inside one lock, making uniqueness checks and writes atomic within the process. Reads rehydrate new Contact instances, so changing a retrieved Contact does not affect persisted state until `UpdateAsync` succeeds.
-
-The repository is process-local. It does not provide distributed consistency, cross-process locking, or durable storage.
-
-## Error Handling
-
-Expected failures are represented by FluentValidation or explicit application exceptions and mapped globally: validation to `400`, not found to `404`, conflict to `409`, and other business failure to `422`. Validation responses add a field-keyed `errors` dictionary; other failures use the custom `ApiResponse` contract. The response body's `statusCode` always matches the HTTP status. Unexpected exceptions are logged and converted to a generic `500` response with error code `Server.UnexpectedError`. Stack traces and exception details are not returned to clients.
-
-## Validation Strategy
-
-- **API:** ASP.NET Core model binding creates HTTP contracts.
-- **Application:** FluentValidation checks input shape before handlers run.
-- **Domain:** Value Objects and Contact enforce business invariants.
-- **Repository:** the synchronized write boundary enforces phone-number uniqueness atomically.
-
-Phone uniqueness is deliberately not a FluentValidation rule: a pre-check followed by a separate write would race. The repository performs the uniqueness check and mutation under the same lock.
-
-## Current Limitations
-
-- Persistence is in memory; data is lost when the application restarts and state is process-local.
-- There is no authentication or authorization.
-- Pagination uses offset-based, process-local in-memory slicing rather than a durable cursor.
-- There is no distributed cache, distributed lock, or database transaction support.
-- There is no production observability stack.
-
-These are deliberate interview-scope constraints rather than claims of production completeness.
-
-## Possible Future Improvements
-
-If product requirements justify them, future work could add EF Core persistence, database migrations, a database unique constraint on canonical phone numbers, real transaction boundaries, authentication and authorization, broader search or cursor-based pagination, structured production logging, metrics and tracing, and container orchestration when deployment needs it. These capabilities were intentionally excluded from the exercise scope.
