@@ -1,6 +1,5 @@
 using FluentAssertions;
 using Mapster;
-using MapsterMapper;
 using PhoneBook.Application.Abstractions.Persistence;
 using PhoneBook.Application.Common.Exceptions;
 using PhoneBook.Application.Common.Mappings;
@@ -18,13 +17,17 @@ namespace PhoneBook.Application.UnitTests.Contacts;
 
 public class ContactHandlerTests
 {
-    private static readonly IMapper Mapper = CreateMapper();
+    static ContactHandlerTests()
+    {
+        TypeAdapterConfig.GlobalSettings.Scan(typeof(ContactMappingConfig).Assembly);
+        TypeAdapterConfig.GlobalSettings.Compile();
+    }
 
     [Fact]
     public async Task Create_handler_should_return_contact_use_utc_time_and_forward_token()
     {
         FakeContactRepository repository = new();
-        CreateContactCommandHandler handler = new(repository, Mapper);
+        CreateContactCommandHandler handler = new(repository);
         using CancellationTokenSource source = new();
         DateTime before = DateTime.UtcNow;
 
@@ -49,7 +52,7 @@ public class ContactHandlerTests
             "Contact.PhoneNumberConflict",
             "A contact with this phone number already exists.");
         FakeContactRepository repository = new() { AddException = expected };
-        CreateContactCommandHandler handler = new(repository, Mapper);
+        CreateContactCommandHandler handler = new(repository);
 
         Func<Task> act = () => handler.Handle(
             new("Erfan", "Ahmadi", "09121234567", "Coworker"),
@@ -65,7 +68,7 @@ public class ContactHandlerTests
     {
         Contact contact = ContactTestData.Create();
         FakeContactRepository repository = new() { ContactToReturn = contact };
-        UpdateContactCommandHandler handler = new(repository, Mapper);
+        UpdateContactCommandHandler handler = new(repository);
         DateTime before = DateTime.UtcNow;
 
         ContactResponse response = await handler.Handle(
@@ -86,7 +89,7 @@ public class ContactHandlerTests
     public async Task Update_handler_should_throw_not_found_exception()
     {
         FakeContactRepository repository = new();
-        UpdateContactCommandHandler handler = new(repository, Mapper);
+        UpdateContactCommandHandler handler = new(repository);
 
         Func<Task> act = () => handler.Handle(
             new(ContactTestData.ContactGuid, "Sara", "Karimi", "09357654321", "Friend"),
@@ -116,7 +119,7 @@ public class ContactHandlerTests
     {
         Contact contact = ContactTestData.Create();
         FakeContactRepository repository = new() { ContactToReturn = contact };
-        GetContactByIdQueryHandler handler = new(repository, Mapper);
+        GetContactByIdQueryHandler handler = new(repository);
 
         ContactResponse response = await handler.Handle(
             new(ContactTestData.ContactGuid),
@@ -129,7 +132,7 @@ public class ContactHandlerTests
     [Fact]
     public async Task GetById_handler_should_throw_not_found_exception()
     {
-        GetContactByIdQueryHandler handler = new(new FakeContactRepository(), Mapper);
+        GetContactByIdQueryHandler handler = new(new FakeContactRepository());
 
         Func<Task> act = () => handler.Handle(
             new(ContactTestData.ContactGuid),
@@ -146,7 +149,7 @@ public class ContactHandlerTests
     {
         Contact contact = ContactTestData.Create();
         FakeContactRepository repository = new() { AllContacts = [contact] };
-        GetContactsQueryHandler handler = new(repository, Mapper);
+        GetContactsQueryHandler handler = new(repository);
 
         PagedData<ContactResponse> response = await handler.Handle(
             new(2, 10),
@@ -165,7 +168,7 @@ public class ContactHandlerTests
     {
         Contact contact = ContactTestData.Create();
         FakeContactRepository repository = new() { ContactsByTag = [contact] };
-        GetContactsByTagQueryHandler handler = new(repository, Mapper);
+        GetContactsByTagQueryHandler handler = new(repository);
 
         PagedData<ContactResponse> response = await handler.Handle(
             new(" COWORKER ", 1, 20),
@@ -177,12 +180,4 @@ public class ContactHandlerTests
         repository.RequestedPageSize.Should().Be(20);
     }
 
-    private static IMapper CreateMapper()
-    {
-        var config = new TypeAdapterConfig();
-        config.Scan(typeof(ContactMappingConfig).Assembly);
-        config.Compile();
-
-        return new Mapper(config);
-    }
 }

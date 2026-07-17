@@ -1,27 +1,33 @@
 using FluentValidation;
 using Mapster;
-using MapsterMapper;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using PhoneBook.Application.Behaviors;
+using System.Reflection;
 
 namespace PhoneBook.Application;
 
 public static class DependencyInjection
 {
-    public static IServiceCollection AddApplication(this IServiceCollection services)
+    public static IServiceCollection AddApplication(
+        this IServiceCollection services,
+        params Assembly[] additionalMappingAssemblies)
     {
-        var mappingConfig = new TypeAdapterConfig();
-        mappingConfig.Scan(typeof(DependencyInjection).Assembly);
+        TypeAdapterConfig mappingConfig = TypeAdapterConfig.GlobalSettings;
+        Assembly applicationAssembly = typeof(DependencyInjection).Assembly;
+        Assembly[] mappingAssemblies = additionalMappingAssemblies
+            .Prepend(applicationAssembly)
+            .Distinct()
+            .ToArray();
+        mappingConfig.Scan(mappingAssemblies);
 
         services.AddSingleton(mappingConfig);
-        services.AddScoped<IMapper, ServiceMapper>();
 
         services.AddMediatR(configuration =>
             configuration.RegisterServicesFromAssembly(
-                typeof(DependencyInjection).Assembly));
+                applicationAssembly));
 
-        services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly);
+        services.AddValidatorsFromAssembly(applicationAssembly);
 
         services.AddTransient(
             typeof(IPipelineBehavior<,>),

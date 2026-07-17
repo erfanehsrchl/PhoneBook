@@ -1,4 +1,5 @@
 using Mapster;
+using PhoneBook.Application.Abstractions.Persistence;
 using PhoneBook.Application.Contacts.Common;
 using PhoneBook.Domain.Contacts;
 
@@ -16,5 +17,7 @@ public sealed class ContactMappingConfig : IRegister
             .Map(destination => destination.Tag, source => source.Tag.Value)
             .Map(destination => destination.CreatedAtUtc, source => source.CreatedAtUtc)
             .Map(destination => destination.UpdatedAtUtc, source => source.UpdatedAtUtc);
+
+        config.NewConfig<PagedData<Contact>, PagedData<ContactResponse>>();
     }
 }

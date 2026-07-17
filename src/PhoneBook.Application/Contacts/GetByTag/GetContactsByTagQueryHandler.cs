@@ -1,5 +1,5 @@
 using MediatR;
-using MapsterMapper;
+using Mapster;
 using PhoneBook.Application.Abstractions.Persistence;
 using PhoneBook.Application.Contacts.Common;
 using PhoneBook.Domain.Contacts;
@@ -10,14 +10,10 @@ public class GetContactsByTagQueryHandler
     : IRequestHandler<GetContactsByTagQuery, PagedData<ContactResponse>>
 {
     private readonly IContactRepository _contactRepository;
-    private readonly IMapper _mapper;
 
-    public GetContactsByTagQueryHandler(
-        IContactRepository contactRepository,
-        IMapper mapper)
+    public GetContactsByTagQueryHandler(IContactRepository contactRepository)
     {
         _contactRepository = contactRepository;
-        _mapper = mapper;
     }
 
     public async Task<PagedData<ContactResponse>> Handle(
@@ -30,10 +26,6 @@ public class GetContactsByTagQueryHandler
             request.PageSize,
             cancellationToken);
 
-        return new PagedData<ContactResponse>(
-            _mapper.Map<IReadOnlyCollection<ContactResponse>>(page.Items),
-            page.PageNumber,
-            page.PageSize,
-            page.TotalCount);
+        return page.Adapt<PagedData<ContactResponse>>();
     }
 }

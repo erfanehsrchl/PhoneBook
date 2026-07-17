@@ -1,3 +1,4 @@
+using Mapster;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using PhoneBook.Api.Contracts;
@@ -47,20 +48,16 @@ public class ContactsController : ControllerBase
         CreateContactRequest request,
         CancellationToken cancellationToken)
     {
-        CreateContactCommand command = new(
-            request.FirstName,
-            request.LastName,
-            request.PhoneNumber,
-            request.Tag);
+        CreateContactCommand command = request.Adapt<CreateContactCommand>();
         ContactResponse response = await _sender.Send(command, cancellationToken);
+        ApiResponse<ContactResponse> apiResponse =
+            (response, StatusCodes.Status201Created, "Contact created successfully.")
+            .Adapt<ApiResponse<ContactResponse>>();
 
         return CreatedAtAction(
             nameof(GetById),
             new { id = response.Id },
-            new ApiResponse<ContactResponse>(
-                response,
-                StatusCodes.Status201Created,
-                "Contact created successfully."));
+            apiResponse);
     }
 
     /// <summary>
@@ -82,18 +79,13 @@ public class ContactsController : ControllerBase
         UpdateContactRequest request,
         CancellationToken cancellationToken)
     {
-        UpdateContactCommand command = new(
-            id,
-            request.FirstName,
-            request.LastName,
-            request.PhoneNumber,
-            request.Tag);
+        UpdateContactCommand command = (id, request).Adapt<UpdateContactCommand>();
         ContactResponse response = await _sender.Send(command, cancellationToken);
+        ApiResponse<ContactResponse> apiResponse =
+            (response, StatusCodes.Status200OK, "Contact updated successfully.")
+            .Adapt<ApiResponse<ContactResponse>>();
 
-        return Ok(new ApiResponse<ContactResponse>(
-            response,
-            StatusCodes.Status200OK,
-            "Contact updated successfully."));
+        return Ok(apiResponse);
     }
 
     /// <summary>
@@ -111,9 +103,8 @@ public class ContactsController : ControllerBase
         Guid id,
         CancellationToken cancellationToken)
     {
-        await _sender.Send(
-            new DeleteContactCommand(id),
-            cancellationToken);
+        DeleteContactCommand command = id.Adapt<DeleteContactCommand>();
+        await _sender.Send(command, cancellationToken);
 
         return NoContent();
     }
@@ -133,14 +124,13 @@ public class ContactsController : ControllerBase
         Guid id,
         CancellationToken cancellationToken)
     {
-        ContactResponse response = await _sender.Send(
-            new GetContactByIdQuery(id),
-            cancellationToken);
+        GetContactByIdQuery query = id.Adapt<GetContactByIdQuery>();
+        ContactResponse response = await _sender.Send(query, cancellationToken);
+        ApiResponse<ContactResponse> apiResponse =
+            (response, StatusCodes.Status200OK, "Contact retrieved successfully.")
+            .Adapt<ApiResponse<ContactResponse>>();
 
-        return Ok(new ApiResponse<ContactResponse>(
-            response,
-            StatusCodes.Status200OK,
-            "Contact retrieved successfully."));
+        return Ok(apiResponse);
     }
 
     /// <summary>
@@ -159,17 +149,17 @@ public class ContactsController : ControllerBase
         [FromQuery] int? pageSize,
         CancellationToken cancellationToken)
     {
-        GetContactsQuery query = new(
-            pageNumber ?? PaginationDefaults.PageNumber,
-            pageSize ?? PaginationDefaults.PageSize);
+        GetContactsQuery query = (pageNumber, pageSize).Adapt<GetContactsQuery>();
         PagedData<ContactResponse> response = await _sender.Send(
             query,
             cancellationToken);
+        PagedResponse<ContactResponse> page =
+            response.Adapt<PagedResponse<ContactResponse>>();
+        ApiResponse<PagedResponse<ContactResponse>> apiResponse =
+            (page, StatusCodes.Status200OK, "Contacts retrieved successfully.")
+            .Adapt<ApiResponse<PagedResponse<ContactResponse>>>();
 
-        return Ok(new ApiResponse<PagedResponse<ContactResponse>>(
-            ToPagedResponse(response),
-            StatusCodes.Status200OK,
-            "Contacts retrieved successfully."));
+        return Ok(apiResponse);
     }
 
     /// <summary>
@@ -190,29 +180,17 @@ public class ContactsController : ControllerBase
         [FromQuery] int? pageSize,
         CancellationToken cancellationToken)
     {
-        GetContactsByTagQuery query = new(
-            tag,
-            pageNumber ?? PaginationDefaults.PageNumber,
-            pageSize ?? PaginationDefaults.PageSize);
+        GetContactsByTagQuery query =
+            (tag, pageNumber, pageSize).Adapt<GetContactsByTagQuery>();
         PagedData<ContactResponse> response = await _sender.Send(
             query,
             cancellationToken);
+        PagedResponse<ContactResponse> page =
+            response.Adapt<PagedResponse<ContactResponse>>();
+        ApiResponse<PagedResponse<ContactResponse>> apiResponse =
+            (page, StatusCodes.Status200OK, "Contacts retrieved successfully.")
+            .Adapt<ApiResponse<PagedResponse<ContactResponse>>>();
 
-        return Ok(new ApiResponse<PagedResponse<ContactResponse>>(
-            ToPagedResponse(response),
-            StatusCodes.Status200OK,
-            "Contacts retrieved successfully."));
-    }
-
-    private static PagedResponse<T> ToPagedResponse<T>(PagedData<T> page)
-    {
-        return new PagedResponse<T>(
-            page.Items,
-            page.PageNumber,
-            page.PageSize,
-            page.TotalCount,
-            page.TotalPages,
-            page.HasPreviousPage,
-            page.HasNextPage);
+        return Ok(apiResponse);
     }
 }

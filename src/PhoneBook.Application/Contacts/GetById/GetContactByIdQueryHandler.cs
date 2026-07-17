@@ -1,5 +1,5 @@
 using MediatR;
-using MapsterMapper;
+using Mapster;
 using PhoneBook.Application.Abstractions.Persistence;
 using PhoneBook.Application.Common.Exceptions;
 using PhoneBook.Application.Contacts.Common;
@@ -11,14 +11,10 @@ public class GetContactByIdQueryHandler
     : IRequestHandler<GetContactByIdQuery, ContactResponse>
 {
     private readonly IContactRepository _contactRepository;
-    private readonly IMapper _mapper;
 
-    public GetContactByIdQueryHandler(
-        IContactRepository contactRepository,
-        IMapper mapper)
+    public GetContactByIdQueryHandler(IContactRepository contactRepository)
     {
         _contactRepository = contactRepository;
-        _mapper = mapper;
     }
 
     public async Task<ContactResponse> Handle(
@@ -36,6 +32,6 @@ public class GetContactByIdQueryHandler
                 "Contact was not found.");
         }
 
-        return _mapper.Map<ContactResponse>(contact);
+        return contact.Adapt<ContactResponse>();
     }
 }

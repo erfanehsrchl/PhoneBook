@@ -1,5 +1,5 @@
 using MediatR;
-using MapsterMapper;
+using Mapster;
 using PhoneBook.Application.Abstractions.Persistence;
 using PhoneBook.Application.Common.Exceptions;
 using PhoneBook.Application.Contacts.Common;
@@ -11,14 +11,10 @@ public class UpdateContactCommandHandler
     : IRequestHandler<UpdateContactCommand, ContactResponse>
 {
     private readonly IContactRepository _contactRepository;
-    private readonly IMapper _mapper;
 
-    public UpdateContactCommandHandler(
-        IContactRepository contactRepository,
-        IMapper mapper)
+    public UpdateContactCommandHandler(IContactRepository contactRepository)
     {
         _contactRepository = contactRepository;
-        _mapper = mapper;
     }
 
     public async Task<ContactResponse> Handle(
@@ -45,6 +41,6 @@ public class UpdateContactCommandHandler
             now);
 
         await _contactRepository.UpdateAsync(contact, cancellationToken);
-        return _mapper.Map<ContactResponse>(contact);
+        return contact.Adapt<ContactResponse>();
     }
 }

@@ -2,6 +2,7 @@ using PhoneBook.Application;
 using Microsoft.AspNetCore.Mvc;
 using PhoneBook.Api.Contracts;
 using PhoneBook.Api.ExceptionHandling;
+using PhoneBook.Api.Mappings;
 using PhoneBook.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -18,7 +19,7 @@ builder.Services.Configure<ApiBehaviorOptions>(options =>
 });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-builder.Services.AddApplication();
+builder.Services.AddApplication(typeof(ApiMappingConfig).Assembly);
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddExceptionHandler(options =>
