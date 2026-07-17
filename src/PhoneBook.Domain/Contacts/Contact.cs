@@ -3,7 +3,7 @@ using PhoneBook.Domain.Shared;
 
 namespace PhoneBook.Domain.Contacts;
 
-public class Contact : AggregateRoot<ContactId>
+public class Contact : AggregateRoot<ContactId>, IAuditableEntity
 {
     private Contact(
         ContactId id,
@@ -11,7 +11,8 @@ public class Contact : AggregateRoot<ContactId>
         LastName lastName,
         PhoneNumber phoneNumber,
         Tag tag,
-        DateTime createdAtUtc)
+        DateTime createdAtUtc,
+        DateTime? updatedAtUtc)
     {
         Id = id;
         FirstName = firstName;
@@ -19,6 +20,7 @@ public class Contact : AggregateRoot<ContactId>
         PhoneNumber = phoneNumber;
         Tag = tag;
         CreatedAtUtc = createdAtUtc;
+        UpdatedAtUtc = updatedAtUtc;
     }
 
     public FirstName FirstName { get; private set; }
@@ -85,7 +87,8 @@ public class Contact : AggregateRoot<ContactId>
             lastNameResult.Value,
             phoneNumberResult.Value,
             tagResult.Value,
-            createdAtUtc);
+            createdAtUtc,
+            null);
 
         return Result<Contact>.Success(contact);
     }
@@ -130,6 +133,11 @@ public class Contact : AggregateRoot<ContactId>
             return Result.Failure(ContactErrors.TimestampMustBeUtc);
         }
 
+        if (updatedAtUtc < CreatedAtUtc)
+        {
+            return Result.Failure(ContactErrors.TimestampBeforeCreated);
+        }
+
         FirstName = firstNameResult.Value;
         LastName = lastNameResult.Value;
         PhoneNumber = phoneNumberResult.Value;
@@ -137,5 +145,47 @@ public class Contact : AggregateRoot<ContactId>
         UpdatedAtUtc = updatedAtUtc;
 
         return Result.Success();
+    }
+
+    public static Result<Contact> Rehydrate(
+        ContactId id,
+        FirstName firstName,
+        LastName lastName,
+        PhoneNumber phoneNumber,
+        Tag tag,
+        DateTime createdAtUtc,
+        DateTime? updatedAtUtc)
+    {
+        ArgumentNullException.ThrowIfNull(firstName);
+        ArgumentNullException.ThrowIfNull(lastName);
+        ArgumentNullException.ThrowIfNull(phoneNumber);
+        ArgumentNullException.ThrowIfNull(tag);
+
+        if (id.Value == Guid.Empty)
+        {
+            return Result<Contact>.Failure(ContactErrors.IdEmpty);
+        }
+
+        if (createdAtUtc.Kind != DateTimeKind.Utc
+            || updatedAtUtc is { Kind: not DateTimeKind.Utc })
+        {
+            return Result<Contact>.Failure(ContactErrors.TimestampMustBeUtc);
+        }
+
+        if (updatedAtUtc < createdAtUtc)
+        {
+            return Result<Contact>.Failure(ContactErrors.TimestampBeforeCreated);
+        }
+
+        Contact contact = new(
+            id,
+            firstName,
+            lastName,
+            phoneNumber,
+            tag,
+            createdAtUtc,
+            updatedAtUtc);
+
+        return Result<Contact>.Success(contact);
     }
 }

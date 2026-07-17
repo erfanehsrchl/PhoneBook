@@ -9,6 +9,11 @@ public static class ContactErrors
         "Contact ID must not be empty.",
         ErrorType.Validation);
 
+    public static Error IdAlreadyExists { get; } = new(
+        "Contact.Id.AlreadyExists",
+        "A contact with this ID already exists.",
+        ErrorType.Conflict);
+
     public static Error FirstNameRequired { get; } = new(
         "Contact.FirstName.Required",
         "First name is required.",
@@ -62,5 +67,10 @@ public static class ContactErrors
     public static Error TimestampMustBeUtc { get; } = new(
         "Contact.Timestamp.MustBeUtc",
         "Contact timestamps must be in UTC.",
+        ErrorType.Validation);
+
+    public static Error TimestampBeforeCreated { get; } = new(
+        "Contact.Timestamp.BeforeCreated",
+        "The update timestamp must not be earlier than the creation timestamp.",
         ErrorType.Validation);
 }
