@@ -337,7 +337,6 @@ Production-ready evolution could include:
 - Rate limiting.
 - Cursor-based pagination for larger datasets.
 - Persistent audit trail.
-- CI coverage reporting and quality gates.
 
 ## Trade-offs
 
