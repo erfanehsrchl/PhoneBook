@@ -48,7 +48,7 @@ The solution follows Clean Architecture. Dependencies point inward: API depends 
 
 - **API** owns HTTP controllers, request/response contracts, Swagger, exception-to-HTTP mapping, and composition root configuration.
 - **Application** owns use cases, commands, queries, handlers, validators, mapping configuration, application exceptions, pipeline behaviors, and repository abstractions.
-- **Domain** owns the `Contact` aggregate, value objects, entity abstractions, and business invariants.
+- **Domain** owns the `Contact` aggregate, selected value objects, entity abstractions, and business invariants.
 - **Infrastructure** owns the in-memory implementation of application persistence abstractions.
 
 ```mermaid
@@ -108,7 +108,7 @@ docs/
 - **PhoneBook.Application** exists to coordinate use cases through CQRS messages, handlers, validators, mapping, and persistence contracts.
 - **PhoneBook.Infrastructure** exists to provide the in-memory repository implementation behind the Application abstraction.
 - **PhoneBook.Api** exists to expose the application through REST endpoints and configure the runtime.
-- **PhoneBook.Domain.UnitTests** verifies value objects, aggregate behavior, and domain invariants.
+- **PhoneBook.Domain.UnitTests** verifies value objects, aggregate behavior, primitive name validation, and domain invariants.
 - **PhoneBook.Application.UnitTests** verifies validators, pipeline behavior, and handlers.
 - **PhoneBook.Infrastructure.UnitTests** verifies repository behavior, pagination, uniqueness, snapshot isolation, and concurrency.
 - **PhoneBook.Api.IntegrationTests** verifies real HTTP behavior through `WebApplicationFactory`.
@@ -175,10 +175,10 @@ CQRS separates write operations from read operations. This keeps each use case s
 The aggregate uses these value objects:
 
 - `ContactId`
-- `FirstName`
-- `LastName`
 - `PhoneNumber`
 - `Tag`
+
+`FirstName` and `LastName` are primitive `string` properties. Their validation is enforced inside the `Contact` aggregate: values are required, trimmed, rejected when empty or whitespace-only, and limited to 100 characters.
 
 Domain rules include required names, required tag, maximum text length of 100 characters, non-empty contact IDs, valid Iranian mobile phone numbers, UTC timestamps, and update timestamps that cannot be earlier than creation timestamps. `PhoneNumber` normalizes supported local and international formats. `Tag` compares case-insensitively.
 
@@ -186,8 +186,8 @@ Domain rules include required names, required tag, maximum text length of 100 ch
 classDiagram
     class Contact {
         +ContactId Id
-        +FirstName FirstName
-        +LastName LastName
+        +string FirstName
+        +string LastName
         +PhoneNumber PhoneNumber
         +Tag Tag
         +DateTime CreatedAtUtc
@@ -197,13 +197,9 @@ classDiagram
         +Rehydrate()
     }
     class ContactId
-    class FirstName
-    class LastName
     class PhoneNumber
     class Tag
     Contact *-- ContactId
-    Contact *-- FirstName
-    Contact *-- LastName
     Contact *-- PhoneNumber
     Contact *-- Tag
 ```
@@ -284,7 +280,7 @@ Repository results are ordered by `CreatedAtUtc` and then by `ContactId`, which 
 
 The solution has focused tests for each layer:
 
-- **Domain unit tests** verify value objects, `Contact` creation, updates, auditing, timestamp rules, and normalization.
+- **Domain unit tests** verify value objects, primitive name validation inside `Contact`, `Contact` creation, updates, auditing, timestamp rules, and normalization.
 - **Application unit tests** verify validators, MediatR validation behavior, handlers, cancellation token forwarding, mapping, and application exceptions.
 - **Infrastructure unit tests** verify repository CRUD behavior, duplicate phone handling, snapshot isolation, deterministic pagination, tag filtering, and concurrency.
 - **API integration tests** verify HTTP endpoints, response envelopes, validation errors, exception handling, and integration with the real ASP.NET Core host.
@@ -312,7 +308,7 @@ docker run --rm -p 8080:8080 phonebook-api
 ## Design Decisions
 
 - **Clean Architecture:** keeps business rules independent from HTTP and persistence details.
-- **DDD:** models contact behavior through an aggregate root and value objects instead of primitive-only logic.
+- **DDD:** models contact behavior through an aggregate root and value objects where they carry dedicated domain behavior, while primitive names are validated inside the aggregate.
 - **CQRS:** keeps read and write use cases explicit and independently testable.
 - **MediatR:** centralizes command/query dispatch and enables pipeline behaviors such as validation.
 - **FluentValidation:** keeps input validation declarative and separate from handlers.
@@ -348,4 +344,3 @@ Production-ready evolution could include:
 This project intentionally keeps persistence in memory to stay focused on architecture and use-case behavior. Data is process-local and lost on restart. The repository provides thread safety inside one application process, not distributed consistency.
 
 Authentication, authorization, durable storage, caching, observability, and deployment orchestration are intentionally limited or absent because they are outside the current interview task scope. The design leaves clear extension points for those concerns without coupling them to the Domain or Application layers.
-

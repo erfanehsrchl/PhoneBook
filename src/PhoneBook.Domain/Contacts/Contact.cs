@@ -4,10 +4,12 @@ namespace PhoneBook.Domain.Contacts;
 
 public class Contact : AggregateRoot<ContactId>, IAuditableEntity
 {
+    private const int MaximumNameLength = 100;
+
     private Contact(
         ContactId id,
-        FirstName firstName,
-        LastName lastName,
+        string firstName,
+        string lastName,
         PhoneNumber phoneNumber,
         Tag tag,
         DateTime createdAtUtc,
@@ -22,9 +24,9 @@ public class Contact : AggregateRoot<ContactId>, IAuditableEntity
         UpdatedAtUtc = updatedAtUtc;
     }
 
-    public FirstName FirstName { get; private set; }
+    public string FirstName { get; private set; }
 
-    public LastName LastName { get; private set; }
+    public string LastName { get; private set; }
 
     public PhoneNumber PhoneNumber { get; private set; }
 
@@ -46,8 +48,8 @@ public class Contact : AggregateRoot<ContactId>, IAuditableEntity
 
         return new Contact(
             id,
-            Contacts.FirstName.Create(firstName),
-            Contacts.LastName.Create(lastName),
+            ValidateRequiredName(firstName, "First name", nameof(firstName)),
+            ValidateRequiredName(lastName, "Last name", nameof(lastName)),
             Contacts.PhoneNumber.Create(phoneNumber),
             Contacts.Tag.Create(tag),
             createdAtUtc,
@@ -61,8 +63,14 @@ public class Contact : AggregateRoot<ContactId>, IAuditableEntity
         string? tag,
         DateTime updatedAtUtc)
     {
-        FirstName newFirstName = Contacts.FirstName.Create(firstName);
-        LastName newLastName = Contacts.LastName.Create(lastName);
+        string newFirstName = ValidateRequiredName(
+            firstName,
+            "First name",
+            nameof(firstName));
+        string newLastName = ValidateRequiredName(
+            lastName,
+            "Last name",
+            nameof(lastName));
         PhoneNumber newPhoneNumber = Contacts.PhoneNumber.Create(phoneNumber);
         Tag newTag = Contacts.Tag.Create(tag);
         ValidateUpdateTimestamp(updatedAtUtc);
@@ -76,15 +84,21 @@ public class Contact : AggregateRoot<ContactId>, IAuditableEntity
 
     public static Contact Rehydrate(
         ContactId id,
-        FirstName firstName,
-        LastName lastName,
+        string? firstName,
+        string? lastName,
         PhoneNumber phoneNumber,
         Tag tag,
         DateTime createdAtUtc,
         DateTime? updatedAtUtc)
     {
-        ArgumentNullException.ThrowIfNull(firstName);
-        ArgumentNullException.ThrowIfNull(lastName);
+        string normalizedFirstName = ValidateRequiredName(
+            firstName,
+            "First name",
+            nameof(firstName));
+        string normalizedLastName = ValidateRequiredName(
+            lastName,
+            "Last name",
+            nameof(lastName));
         ArgumentNullException.ThrowIfNull(phoneNumber);
         ArgumentNullException.ThrowIfNull(tag);
         ValidateCreationTimestamp(createdAtUtc);
@@ -108,12 +122,34 @@ public class Contact : AggregateRoot<ContactId>, IAuditableEntity
 
         return new Contact(
             id,
-            firstName,
-            lastName,
+            normalizedFirstName,
+            normalizedLastName,
             phoneNumber,
             tag,
             createdAtUtc,
             updatedAtUtc);
+    }
+
+    private static string ValidateRequiredName(
+        string? value,
+        string displayName,
+        string parameterName)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            throw new ArgumentException($"{displayName} is required.", parameterName);
+        }
+
+        string normalizedValue = value.Trim();
+
+        if (normalizedValue.Length > MaximumNameLength)
+        {
+            throw new ArgumentException(
+                $"{displayName} must not exceed 100 characters.",
+                parameterName);
+        }
+
+        return normalizedValue;
     }
 
     private static void ValidateCreationTimestamp(DateTime createdAtUtc)

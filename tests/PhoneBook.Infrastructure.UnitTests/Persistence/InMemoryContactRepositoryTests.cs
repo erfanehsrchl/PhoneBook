@@ -23,7 +23,7 @@ public class InMemoryContactRepositoryTests
         Contact stored = (await repository.GetByIdAsync(contact.Id, CancellationToken.None))!;
 
         ReferenceEquals(stored, contact).Should().BeFalse();
-        stored.FirstName.Value.Should().Be("Sara");
+        stored.FirstName.Should().Be("Sara");
         stored.CreatedAtUtc.Should().Be(ContactTestData.CreatedAtUtc);
         stored.UpdatedAtUtc.Should().Be(ContactTestData.UpdatedAtUtc);
     }
@@ -90,7 +90,7 @@ public class InMemoryContactRepositoryTests
         Contact persisted = (await repository.GetByIdAsync(contact.Id, CancellationToken.None))!;
 
         ReferenceEquals(firstRead, secondRead).Should().BeFalse();
-        persisted.FirstName.Value.Should().Be("Erfan");
+        persisted.FirstName.Should().Be("Erfan");
         persisted.PhoneNumber.Value.Should().Be("+989121234567");
         persisted.UpdatedAtUtc.Should().BeNull();
     }

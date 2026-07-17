@@ -209,8 +209,8 @@ public class InMemoryContactRepository : IContactRepository
 
     private record ContactSnapshot(
         ContactId Id,
-        FirstName FirstName,
-        LastName LastName,
+        string FirstName,
+        string LastName,
         PhoneNumber PhoneNumber,
         Tag Tag,
         DateTime CreatedAtUtc,

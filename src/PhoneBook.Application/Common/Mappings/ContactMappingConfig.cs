@@ -11,8 +11,8 @@ public sealed class ContactMappingConfig : IRegister
     {
         config.NewConfig<Contact, ContactResponse>()
             .Map(destination => destination.Id, source => source.Id.Value)
-            .Map(destination => destination.FirstName, source => source.FirstName.Value)
-            .Map(destination => destination.LastName, source => source.LastName.Value)
+            .Map(destination => destination.FirstName, source => source.FirstName)
+            .Map(destination => destination.LastName, source => source.LastName)
             .Map(destination => destination.PhoneNumber, source => source.PhoneNumber.Value)
             .Map(destination => destination.Tag, source => source.Tag.Value)
             .Map(destination => destination.CreatedAtUtc, source => source.CreatedAtUtc)

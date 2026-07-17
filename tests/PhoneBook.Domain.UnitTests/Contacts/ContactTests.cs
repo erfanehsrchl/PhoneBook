@@ -25,8 +25,8 @@ public class ContactTests
             CreatedAtUtc);
 
         contact.Id.Equals(id).Should().BeTrue();
-        contact.FirstName.Value.Should().Be("Erfan");
-        contact.LastName.Value.Should().Be("Ahmadi");
+        contact.FirstName.Should().Be("Erfan");
+        contact.LastName.Should().Be("Ahmadi");
         contact.PhoneNumber.Value.Should().Be("+989121234567");
         contact.Tag.Value.Should().Be("Coworker");
         contact.CreatedAtUtc.Should().Be(CreatedAtUtc);
@@ -68,8 +68,8 @@ public class ContactTests
 
         contact.Update("Sara", "Karimi", "0935 765 4321", "Friend", UpdatedAtUtc);
 
-        contact.FirstName.Value.Should().Be("Sara");
-        contact.LastName.Value.Should().Be("Karimi");
+        contact.FirstName.Should().Be("Sara");
+        contact.LastName.Should().Be("Karimi");
         contact.PhoneNumber.Value.Should().Be("+989357654321");
         contact.Tag.Value.Should().Be("Friend");
         contact.UpdatedAtUtc.Should().Be(UpdatedAtUtc);
@@ -90,7 +90,7 @@ public class ContactTests
             UpdatedAtUtc);
 
         act.Should().Throw<ArgumentException>();
-        contact.FirstName.Value.Should().Be("Erfan");
+        contact.FirstName.Should().Be("Erfan");
         contact.PhoneNumber.Value.Should().Be("+989121234567");
         contact.UpdatedAtUtc.Should().BeNull();
     }
@@ -108,7 +108,7 @@ public class ContactTests
             DateTime.SpecifyKind(UpdatedAtUtc, DateTimeKind.Local));
 
         act.Should().Throw<ArgumentException>();
-        contact.FirstName.Value.Should().Be("Erfan");
+        contact.FirstName.Should().Be("Erfan");
         contact.UpdatedAtUtc.Should().BeNull();
     }
 

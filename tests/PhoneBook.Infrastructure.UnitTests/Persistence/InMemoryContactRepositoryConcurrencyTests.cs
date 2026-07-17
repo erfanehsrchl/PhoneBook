@@ -63,8 +63,8 @@ public class InMemoryContactRepositoryConcurrencyTests
         {
             Contact contact = (await repository.GetByIdAsync(original.Id, CancellationToken.None))!;
             contact.Update(
-                contact.FirstName.Value,
-                contact.LastName.Value,
+                contact.FirstName,
+                contact.LastName,
                 targetPhone,
                 contact.Tag.Value,
                 ContactTestData.UpdatedAtUtc);
