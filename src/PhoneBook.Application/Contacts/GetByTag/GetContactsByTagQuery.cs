@@ -1,7 +1,8 @@
-using PhoneBook.Application.Abstractions.Messaging;
+using MediatR;
+using PhoneBook.Application.Abstractions.Persistence;
 using PhoneBook.Application.Contacts.Common;
 
 namespace PhoneBook.Application.Contacts.GetByTag;
 
-public record GetContactsByTagQuery(string? Tag)
-    : IQuery<IReadOnlyCollection<ContactResponse>>;
+public sealed record GetContactsByTagQuery(string? Tag, int PageNumber, int PageSize)
+    : IRequest<PagedData<ContactResponse>>;

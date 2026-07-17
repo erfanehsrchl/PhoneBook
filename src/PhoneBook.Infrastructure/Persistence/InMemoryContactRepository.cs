@@ -1,6 +1,6 @@
 using PhoneBook.Application.Abstractions.Persistence;
+using PhoneBook.Application.Common.Exceptions;
 using PhoneBook.Domain.Contacts;
-using PhoneBook.Domain.Shared;
 
 namespace PhoneBook.Infrastructure.Persistence;
 
@@ -10,7 +10,7 @@ public class InMemoryContactRepository : IContactRepository
     private readonly Dictionary<PhoneNumber, ContactId> _phoneIndex = new();
     private readonly object _syncRoot = new();
 
-    public Task<Result> AddAsync(
+    public Task AddAsync(
         Contact contact,
         CancellationToken cancellationToken)
     {
@@ -21,12 +21,16 @@ public class InMemoryContactRepository : IContactRepository
         {
             if (_contacts.ContainsKey(contact.Id))
             {
-                return Task.FromResult(Result.Failure(ContactErrors.IdAlreadyExists));
+                throw new BusinessRuleException(
+                    "Contact.InvalidState",
+                    "A contact with this ID already exists.");
             }
 
             if (_phoneIndex.ContainsKey(contact.PhoneNumber))
             {
-                return Task.FromResult(Result.Failure(ContactErrors.PhoneNumberAlreadyExists));
+                throw new ConflictException(
+                    "Contact.PhoneNumberConflict",
+                    "A contact with this phone number already exists.");
             }
 
             ContactSnapshot snapshot = ContactSnapshot.FromContact(contact);
@@ -34,7 +38,7 @@ public class InMemoryContactRepository : IContactRepository
             _phoneIndex.Add(contact.PhoneNumber, contact.Id);
         }
 
-        return Task.FromResult(Result.Success());
+        return Task.CompletedTask;
     }
 
     public Task<Contact?> GetByIdAsync(
@@ -54,32 +58,80 @@ public class InMemoryContactRepository : IContactRepository
         return Task.FromResult(contact);
     }
 
-    public Task<IReadOnlyCollection<Contact>> GetByTagAsync(
+    public Task<PagedData<Contact>> GetAllAsync(
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ValidatePagination(pageNumber, pageSize);
+
+        PagedData<Contact> result;
+
+        lock (_syncRoot)
+        {
+            result = CreatePage(_contacts.Values, pageNumber, pageSize);
+        }
+
+        return Task.FromResult(result);
+    }
+
+    public Task<PagedData<Contact>> GetByTagAsync(
         Tag tag,
+        int pageNumber,
+        int pageSize,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(tag);
+        ValidatePagination(pageNumber, pageSize);
 
-        ContactSnapshot[] snapshots;
+        PagedData<Contact> result;
 
         lock (_syncRoot)
         {
-            snapshots = _contacts.Values
-                .Where(snapshot => snapshot.Tag.Equals(tag))
-                .ToArray();
+            result = CreatePage(
+                _contacts.Values.Where(snapshot => snapshot.Tag.Equals(tag)),
+                pageNumber,
+                pageSize);
         }
 
-        Contact[] contacts = snapshots
-            .OrderBy(snapshot => snapshot.CreatedAtUtc)
-            .ThenBy(snapshot => snapshot.Id.Value)
-            .Select(Rehydrate)
-            .ToArray();
-
-        return Task.FromResult<IReadOnlyCollection<Contact>>(contacts);
+        return Task.FromResult(result);
     }
 
-    public Task<Result> UpdateAsync(
+    private static PagedData<Contact> CreatePage(
+        IEnumerable<ContactSnapshot> source,
+        int pageNumber,
+        int pageSize)
+    {
+        ContactSnapshot[] orderedSnapshots = source
+            .OrderBy(snapshot => snapshot.CreatedAtUtc)
+            .ThenBy(snapshot => snapshot.Id.Value)
+            .ToArray();
+        long offset = (long)(pageNumber - 1) * pageSize;
+        Contact[] contacts = offset >= orderedSnapshots.Length
+            ? []
+            : orderedSnapshots
+                .Skip((int)offset)
+                .Take(pageSize)
+                .Select(Rehydrate)
+                .ToArray();
+
+        return new PagedData<Contact>(
+            contacts,
+            pageNumber,
+            pageSize,
+            orderedSnapshots.Length);
+    }
+
+    private static void ValidatePagination(int pageNumber, int pageSize)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(pageNumber, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(pageSize, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(pageSize, 100);
+    }
+
+    public Task UpdateAsync(
         Contact contact,
         CancellationToken cancellationToken)
     {
@@ -90,7 +142,9 @@ public class InMemoryContactRepository : IContactRepository
         {
             if (!_contacts.TryGetValue(contact.Id, out ContactSnapshot? storedSnapshot))
             {
-                return Task.FromResult(Result.Failure(ContactErrors.NotFound));
+                throw new NotFoundException(
+                    "Contact.NotFound",
+                    "Contact was not found.");
             }
 
             PhoneNumber oldPhoneNumber = storedSnapshot.PhoneNumber;
@@ -101,7 +155,9 @@ public class InMemoryContactRepository : IContactRepository
                 && _phoneIndex.TryGetValue(newPhoneNumber, out ContactId existingContactId)
                 && existingContactId != contact.Id)
             {
-                return Task.FromResult(Result.Failure(ContactErrors.PhoneNumberAlreadyExists));
+                throw new ConflictException(
+                    "Contact.PhoneNumberConflict",
+                    "A contact with this phone number already exists.");
             }
 
             ContactSnapshot updatedSnapshot = ContactSnapshot.FromContact(contact);
@@ -114,10 +170,10 @@ public class InMemoryContactRepository : IContactRepository
             }
         }
 
-        return Task.FromResult(Result.Success());
+        return Task.CompletedTask;
     }
 
-    public Task<bool> DeleteAsync(
+    public Task DeleteAsync(
         ContactId id,
         CancellationToken cancellationToken)
     {
@@ -127,19 +183,21 @@ public class InMemoryContactRepository : IContactRepository
         {
             if (!_contacts.TryGetValue(id, out ContactSnapshot? snapshot))
             {
-                return Task.FromResult(false);
+                throw new NotFoundException(
+                    "Contact.NotFound",
+                    "Contact was not found.");
             }
 
             _contacts.Remove(id);
             _phoneIndex.Remove(snapshot.PhoneNumber);
         }
 
-        return Task.FromResult(true);
+        return Task.CompletedTask;
     }
 
     private static Contact Rehydrate(ContactSnapshot snapshot)
     {
-        Result<Contact> result = Contact.Rehydrate(
+        return Contact.Rehydrate(
             snapshot.Id,
             snapshot.FirstName,
             snapshot.LastName,
@@ -147,11 +205,6 @@ public class InMemoryContactRepository : IContactRepository
             snapshot.Tag,
             snapshot.CreatedAtUtc,
             snapshot.UpdatedAtUtc);
-
-        return result.IsSuccess
-            ? result.Value
-            : throw new InvalidOperationException(
-                $"Stored contact '{snapshot.Id.Value}' violates domain invariants: {result.Error.Code}.");
     }
 
     private record ContactSnapshot(

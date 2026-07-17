@@ -1,11 +1,10 @@
-using PhoneBook.Application.Abstractions.Messaging;
+using MediatR;
 using PhoneBook.Application.Abstractions.Persistence;
 using PhoneBook.Domain.Contacts;
-using PhoneBook.Domain.Shared;
 
 namespace PhoneBook.Application.Contacts.Delete;
 
-public class DeleteContactCommandHandler : ICommandHandler<DeleteContactCommand>
+public class DeleteContactCommandHandler : IRequestHandler<DeleteContactCommand>
 {
     private readonly IContactRepository _contactRepository;
 
@@ -14,23 +13,12 @@ public class DeleteContactCommandHandler : ICommandHandler<DeleteContactCommand>
         _contactRepository = contactRepository;
     }
 
-    public async Task<Result> Handle(
+    public async Task Handle(
         DeleteContactCommand request,
         CancellationToken cancellationToken)
     {
-        Result<ContactId> contactIdResult = ContactId.Create(request.ContactId);
-
-        if (contactIdResult.IsFailure)
-        {
-            return Result.Failure(contactIdResult.Error);
-        }
-
-        bool deleted = await _contactRepository.DeleteAsync(
-            contactIdResult.Value,
+        await _contactRepository.DeleteAsync(
+            new ContactId(request.ContactId),
             cancellationToken);
-
-        return deleted
-            ? Result.Success()
-            : Result.Failure(ContactErrors.NotFound);
     }
 }

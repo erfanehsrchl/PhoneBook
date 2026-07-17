@@ -1,333 +1,188 @@
 using FluentAssertions;
+using Mapster;
+using MapsterMapper;
+using PhoneBook.Application.Abstractions.Persistence;
+using PhoneBook.Application.Common.Exceptions;
+using PhoneBook.Application.Common.Mappings;
+using PhoneBook.Application.Contacts.Common;
 using PhoneBook.Application.Contacts.Create;
 using PhoneBook.Application.Contacts.Delete;
+using PhoneBook.Application.Contacts.GetAll;
 using PhoneBook.Application.Contacts.GetById;
 using PhoneBook.Application.Contacts.GetByTag;
 using PhoneBook.Application.Contacts.Update;
 using PhoneBook.Application.UnitTests.TestDoubles;
 using PhoneBook.Domain.Contacts;
-using PhoneBook.Domain.Shared;
 
 namespace PhoneBook.Application.UnitTests.Contacts;
 
 public class ContactHandlerTests
 {
+    private static readonly IMapper Mapper = CreateMapper();
+
     [Fact]
-    public async Task Create_handler_should_return_mapped_contact_and_forward_clock_and_token()
+    public async Task Create_handler_should_return_contact_use_utc_time_and_forward_token()
     {
         FakeContactRepository repository = new();
-        FakeDateTimeProvider clock = new(ContactTestData.CreatedAtUtc);
-        CreateContactCommandHandler handler = new(repository, clock);
+        CreateContactCommandHandler handler = new(repository, Mapper);
         using CancellationTokenSource source = new();
-        CreateContactCommand command = new(
-            " Erfan ",
-            " Ahmadi ",
-            "0912-123-4567",
-            " Coworker ");
+        DateTime before = DateTime.UtcNow;
 
-        Result<Application.Contacts.Common.ContactResponse> result = await handler.Handle(
-            command,
+        ContactResponse response = await handler.Handle(
+            new("Erfan", "Ahmadi", "0912-123-4567", "Coworker"),
             source.Token);
+        DateTime after = DateTime.UtcNow;
 
-        result.IsSuccess.Should().BeTrue();
-        result.Value.Id.Should().NotBe(Guid.Empty);
-        result.Value.FirstName.Should().Be("Erfan");
-        result.Value.LastName.Should().Be("Ahmadi");
-        result.Value.PhoneNumber.Should().Be("+989121234567");
-        result.Value.Tag.Should().Be("Coworker");
-        result.Value.CreatedAtUtc.Should().Be(ContactTestData.CreatedAtUtc);
-        result.Value.UpdatedAtUtc.Should().BeNull();
+        response.PhoneNumber.Should().Be("+989121234567");
+        response.CreatedAtUtc.Kind.Should().Be(DateTimeKind.Utc);
+        response.CreatedAtUtc.Should().BeOnOrAfter(before).And.BeOnOrBefore(after);
+        response.UpdatedAtUtc.Should().BeNull();
         repository.AddCallCount.Should().Be(1);
-        repository.GetByIdCallCount.Should().Be(0);
-        repository.AddCancellationToken.Equals(source.Token).Should().BeTrue();
-        (repository.AddedContact is not null).Should().BeTrue();
-        repository.AddedContact!.CreatedAtUtc.Should().Be(clock.UtcNow);
-    }
-
-    [Theory]
-    [InlineData("", "Ahmadi", "09121234567", "Coworker", "Contact.FirstName.Required")]
-    [InlineData("Erfan", "", "09121234567", "Coworker", "Contact.LastName.Required")]
-    [InlineData("Erfan", "Ahmadi", "invalid", "Coworker", "Contact.PhoneNumber.Invalid")]
-    [InlineData("Erfan", "Ahmadi", "09121234567", "", "Contact.Tag.Required")]
-    public async Task Create_handler_should_propagate_domain_input_failure(
-        string firstName,
-        string lastName,
-        string phoneNumber,
-        string tag,
-        string expectedCode)
-    {
-        FakeContactRepository repository = new();
-        CreateContactCommandHandler handler = new(
-            repository,
-            new FakeDateTimeProvider(ContactTestData.CreatedAtUtc));
-
-        Result<Application.Contacts.Common.ContactResponse> result = await handler.Handle(
-            new(firstName, lastName, phoneNumber, tag),
-            CancellationToken.None);
-
-        result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be(expectedCode);
-        repository.AddCallCount.Should().Be(0);
+        repository.AddedContact!.Id.Value.Should().Be(response.Id);
+        repository.CapturedCancellationToken.Equals(source.Token).Should().BeTrue();
     }
 
     [Fact]
-    public async Task Create_handler_should_propagate_repository_conflict()
+    public async Task Create_handler_should_propagate_conflict_exception()
     {
-        FakeContactRepository repository = new()
-        {
-            AddResult = Result.Failure(ContactErrors.PhoneNumberAlreadyExists)
-        };
-        CreateContactCommandHandler handler = new(
-            repository,
-            new FakeDateTimeProvider(ContactTestData.CreatedAtUtc));
+        ConflictException expected = new(
+            "Contact.PhoneNumberConflict",
+            "A contact with this phone number already exists.");
+        FakeContactRepository repository = new() { AddException = expected };
+        CreateContactCommandHandler handler = new(repository, Mapper);
 
-        Result<Application.Contacts.Common.ContactResponse> result = await handler.Handle(
+        Func<Task> act = () => handler.Handle(
             new("Erfan", "Ahmadi", "09121234567", "Coworker"),
             CancellationToken.None);
 
-        result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("Contact.PhoneNumber.AlreadyExists");
-        result.Error.Type.Should().Be(ErrorType.Conflict);
+        ConflictException exception =
+            (await act.Should().ThrowAsync<ConflictException>()).Which;
+        exception.Code.Should().Be("Contact.PhoneNumberConflict");
     }
 
     [Fact]
-    public async Task Update_handler_should_persist_detached_contact_and_return_mapped_response()
+    public async Task Update_handler_should_return_updated_contact_and_use_utc_time()
     {
-        Contact existing = ContactTestData.Create();
-        FakeContactRepository repository = new() { ContactToReturn = existing };
-        FakeDateTimeProvider clock = new(ContactTestData.UpdatedAtUtc);
-        UpdateContactCommandHandler handler = new(repository, clock);
-        using CancellationTokenSource source = new();
+        Contact contact = ContactTestData.Create();
+        FakeContactRepository repository = new() { ContactToReturn = contact };
+        UpdateContactCommandHandler handler = new(repository, Mapper);
+        DateTime before = DateTime.UtcNow;
 
-        Result<Application.Contacts.Common.ContactResponse> result = await handler.Handle(
-            new(
-                ContactTestData.ContactGuid,
-                "Sara",
-                "Karimi",
-                "0935 765 4321",
-                "Friend"),
-            source.Token);
+        ContactResponse response = await handler.Handle(
+            new(ContactTestData.ContactGuid, "Sara", "Karimi", "09357654321", "Friend"),
+            CancellationToken.None);
+        DateTime after = DateTime.UtcNow;
 
-        result.IsSuccess.Should().BeTrue();
-        result.Value.FirstName.Should().Be("Sara");
-        result.Value.LastName.Should().Be("Karimi");
-        result.Value.PhoneNumber.Should().Be("+989357654321");
-        result.Value.Tag.Should().Be("Friend");
-        result.Value.CreatedAtUtc.Should().Be(ContactTestData.CreatedAtUtc);
-        result.Value.UpdatedAtUtc.Should().Be(clock.UtcNow);
-        repository.GetByIdCallCount.Should().Be(1);
+        response.FirstName.Should().Be("Sara");
+        response.PhoneNumber.Should().Be("+989357654321");
+        response.UpdatedAtUtc.Should().NotBeNull();
+        response.UpdatedAtUtc!.Value.Kind.Should().Be(DateTimeKind.Utc);
+        response.UpdatedAtUtc.Value.Should().BeOnOrAfter(before).And.BeOnOrBefore(after);
         repository.UpdateCallCount.Should().Be(1);
-        repository.GetByIdCancellationToken.Equals(source.Token).Should().BeTrue();
-        repository.UpdateCancellationToken.Equals(source.Token).Should().BeTrue();
-        ReferenceEquals(repository.UpdatedContact, existing).Should().BeTrue();
+        ReferenceEquals(repository.UpdatedContact, contact).Should().BeTrue();
     }
 
     [Fact]
-    public async Task Update_handler_should_return_not_found_without_persisting()
+    public async Task Update_handler_should_throw_not_found_exception()
     {
         FakeContactRepository repository = new();
-        UpdateContactCommandHandler handler = new(
-            repository,
-            new FakeDateTimeProvider(ContactTestData.UpdatedAtUtc));
+        UpdateContactCommandHandler handler = new(repository, Mapper);
 
-        Result<Application.Contacts.Common.ContactResponse> result = await handler.Handle(
+        Func<Task> act = () => handler.Handle(
             new(ContactTestData.ContactGuid, "Sara", "Karimi", "09357654321", "Friend"),
             CancellationToken.None);
 
-        result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("Contact.NotFound");
-        repository.UpdateCallCount.Should().Be(0);
-    }
-
-    [Theory]
-    [InlineData("", "Karimi", "09357654321", "Friend", "Contact.FirstName.Required")]
-    [InlineData("Sara", "", "09357654321", "Friend", "Contact.LastName.Required")]
-    [InlineData("Sara", "Karimi", "invalid", "Friend", "Contact.PhoneNumber.Invalid")]
-    [InlineData("Sara", "Karimi", "09357654321", "", "Contact.Tag.Required")]
-    public async Task Update_handler_should_propagate_domain_input_failure_without_persisting(
-        string firstName,
-        string lastName,
-        string phoneNumber,
-        string tag,
-        string expectedCode)
-    {
-        FakeContactRepository repository = new() { ContactToReturn = ContactTestData.Create() };
-        UpdateContactCommandHandler handler = new(
-            repository,
-            new FakeDateTimeProvider(ContactTestData.UpdatedAtUtc));
-
-        Result<Application.Contacts.Common.ContactResponse> result = await handler.Handle(
-            new(ContactTestData.ContactGuid, firstName, lastName, phoneNumber, tag),
-            CancellationToken.None);
-
-        result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be(expectedCode);
+        NotFoundException exception =
+            (await act.Should().ThrowAsync<NotFoundException>()).Which;
+        exception.Code.Should().Be("Contact.NotFound");
         repository.UpdateCallCount.Should().Be(0);
     }
 
     [Fact]
-    public async Task Update_handler_should_not_persist_when_domain_rejects_clock()
+    public async Task Delete_handler_should_forward_request()
     {
-        FakeContactRepository repository = new() { ContactToReturn = ContactTestData.Create() };
-        UpdateContactCommandHandler handler = new(
-            repository,
-            new FakeDateTimeProvider(ContactTestData.CreatedAtUtc.AddTicks(-1)));
-
-        Result<Application.Contacts.Common.ContactResponse> result = await handler.Handle(
-            new(ContactTestData.ContactGuid, "Sara", "Karimi", "09357654321", "Friend"),
-            CancellationToken.None);
-
-        result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("Contact.Timestamp.BeforeCreated");
-        repository.UpdateCallCount.Should().Be(0);
-    }
-
-    [Fact]
-    public async Task Update_handler_should_propagate_repository_conflict()
-    {
-        FakeContactRepository repository = new()
-        {
-            ContactToReturn = ContactTestData.Create(),
-            UpdateResult = Result.Failure(ContactErrors.PhoneNumberAlreadyExists)
-        };
-        UpdateContactCommandHandler handler = new(
-            repository,
-            new FakeDateTimeProvider(ContactTestData.UpdatedAtUtc));
-
-        Result<Application.Contacts.Common.ContactResponse> result = await handler.Handle(
-            new(ContactTestData.ContactGuid, "Sara", "Karimi", "09357654321", "Friend"),
-            CancellationToken.None);
-
-        result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("Contact.PhoneNumber.AlreadyExists");
-        result.Error.Type.Should().Be(ErrorType.Conflict);
-    }
-
-    [Theory]
-    [InlineData(true, true, null)]
-    [InlineData(false, false, "Contact.NotFound")]
-    public async Task Delete_handler_should_use_single_atomic_delete_call(
-        bool repositoryDeleteResult,
-        bool expectedSuccess,
-        string? expectedErrorCode)
-    {
-        FakeContactRepository repository = new() { DeleteResult = repositoryDeleteResult };
+        FakeContactRepository repository = new();
         DeleteContactCommandHandler handler = new(repository);
         using CancellationTokenSource source = new();
 
-        Result result = await handler.Handle(
-            new(ContactTestData.ContactGuid),
-            source.Token);
+        await handler.Handle(new(ContactTestData.ContactGuid), source.Token);
 
-        result.IsSuccess.Should().Be(expectedSuccess);
-        result.Error.Code.Should().Be(expectedErrorCode ?? "Error.None");
         repository.DeleteCallCount.Should().Be(1);
-        repository.GetByIdCallCount.Should().Be(0);
-        repository.DeleteCancellationToken.Equals(source.Token).Should().BeTrue();
+        repository.CapturedCancellationToken.Equals(source.Token).Should().BeTrue();
     }
 
     [Fact]
-    public async Task GetById_handler_should_map_primitive_and_audit_values_and_forward_token()
+    public async Task GetById_handler_should_return_mapped_contact()
     {
         Contact contact = ContactTestData.Create();
-        contact.Update(
-            "Sara",
-            "Karimi",
-            "09357654321",
-            "Friend",
-            ContactTestData.UpdatedAtUtc);
         FakeContactRepository repository = new() { ContactToReturn = contact };
-        GetContactByIdQueryHandler handler = new(repository);
-        using CancellationTokenSource source = new();
+        GetContactByIdQueryHandler handler = new(repository, Mapper);
 
-        Result<Application.Contacts.Common.ContactResponse> result = await handler.Handle(
-            new(ContactTestData.ContactGuid),
-            source.Token);
-
-        result.IsSuccess.Should().BeTrue();
-        result.Value.Id.Should().Be(ContactTestData.ContactGuid);
-        result.Value.FirstName.Should().Be("Sara");
-        result.Value.PhoneNumber.Should().Be("+989357654321");
-        result.Value.CreatedAtUtc.Should().Be(ContactTestData.CreatedAtUtc);
-        result.Value.UpdatedAtUtc.Should().Be(ContactTestData.UpdatedAtUtc);
-        repository.GetByIdCancellationToken.Equals(source.Token).Should().BeTrue();
-    }
-
-    [Fact]
-    public async Task GetById_handler_should_return_not_found()
-    {
-        FakeContactRepository repository = new();
-        GetContactByIdQueryHandler handler = new(repository);
-
-        Result<Application.Contacts.Common.ContactResponse> result = await handler.Handle(
+        ContactResponse response = await handler.Handle(
             new(ContactTestData.ContactGuid),
             CancellationToken.None);
 
-        result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("Contact.NotFound");
+        response.Id.Should().Be(contact.Id.Value);
+        response.PhoneNumber.Should().Be(contact.PhoneNumber.Value);
     }
 
     [Fact]
-    public async Task GetByTag_handler_should_preserve_order_map_all_contacts_and_forward_token()
+    public async Task GetById_handler_should_throw_not_found_exception()
     {
-        Contact first = ContactTestData.Create(
-            firstName: "First",
-            phoneNumber: "09121234567",
-            tag: "Coworker");
-        Contact second = ContactTestData.Create(
-            id: Guid.Parse("22334455-6677-8899-aabb-ccddeeff0011"),
-            firstName: "Second",
-            phoneNumber: "09357654321",
-            tag: "coworker");
-        second.Update(
-            "Second",
-            "Updated",
-            "09357654321",
-            "coworker",
-            ContactTestData.UpdatedAtUtc);
-        FakeContactRepository repository = new() { ContactsByTag = [first, second] };
-        GetContactsByTagQueryHandler handler = new(repository);
-        using CancellationTokenSource source = new();
+        GetContactByIdQueryHandler handler = new(new FakeContactRepository(), Mapper);
 
-        Result<IReadOnlyCollection<Application.Contacts.Common.ContactResponse>> result =
-            await handler.Handle(new(" COWORKER "), source.Token);
+        Func<Task> act = () => handler.Handle(
+            new(ContactTestData.ContactGuid),
+            CancellationToken.None);
 
-        result.IsSuccess.Should().BeTrue();
-        result.Value.Select(response => response.FirstName)
-            .Should()
-            .ContainInOrder("First", "Second");
-        result.Value.Last().PhoneNumber.Should().Be("+989357654321");
-        result.Value.Last().CreatedAtUtc.Should().Be(ContactTestData.CreatedAtUtc);
-        result.Value.Last().UpdatedAtUtc.Should().Be(ContactTestData.UpdatedAtUtc);
-        repository.GetByTagCallCount.Should().Be(1);
+        NotFoundException exception =
+            (await act.Should().ThrowAsync<NotFoundException>()).Which;
+        exception.Code.Should().Be("Contact.NotFound");
+        exception.Message.Should().Be("Contact was not found.");
+    }
+
+    [Fact]
+    public async Task GetAll_handler_should_map_page_and_forward_pagination()
+    {
+        Contact contact = ContactTestData.Create();
+        FakeContactRepository repository = new() { AllContacts = [contact] };
+        GetContactsQueryHandler handler = new(repository, Mapper);
+
+        PagedData<ContactResponse> response = await handler.Handle(
+            new(2, 10),
+            CancellationToken.None);
+
+        response.Items.Should().ContainSingle();
+        response.Items.Single().Id.Should().Be(contact.Id.Value);
+        response.PageNumber.Should().Be(2);
+        response.PageSize.Should().Be(10);
+        response.TotalCount.Should().Be(1);
+        repository.GetAllCallCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task GetByTag_handler_should_map_page_and_normalize_tag()
+    {
+        Contact contact = ContactTestData.Create();
+        FakeContactRepository repository = new() { ContactsByTag = [contact] };
+        GetContactsByTagQueryHandler handler = new(repository, Mapper);
+
+        PagedData<ContactResponse> response = await handler.Handle(
+            new(" COWORKER ", 1, 20),
+            CancellationToken.None);
+
+        response.Items.Should().ContainSingle();
         repository.RequestedTag!.Value.Should().Be("COWORKER");
-        repository.GetByTagCancellationToken.Equals(source.Token).Should().BeTrue();
+        repository.RequestedPageNumber.Should().Be(1);
+        repository.RequestedPageSize.Should().Be(20);
     }
 
-    [Fact]
-    public async Task GetByTag_handler_should_return_success_with_empty_collection()
+    private static IMapper CreateMapper()
     {
-        FakeContactRepository repository = new();
-        GetContactsByTagQueryHandler handler = new(repository);
+        var config = new TypeAdapterConfig();
+        config.Scan(typeof(ContactMappingConfig).Assembly);
+        config.Compile();
 
-        Result<IReadOnlyCollection<Application.Contacts.Common.ContactResponse>> result =
-            await handler.Handle(new("Missing"), CancellationToken.None);
-
-        result.IsSuccess.Should().BeTrue();
-        result.Value.Should().BeEmpty();
-    }
-
-    [Fact]
-    public async Task GetByTag_handler_should_return_domain_failure_for_invalid_tag()
-    {
-        FakeContactRepository repository = new();
-        GetContactsByTagQueryHandler handler = new(repository);
-
-        Result<IReadOnlyCollection<Application.Contacts.Common.ContactResponse>> result =
-            await handler.Handle(new(" "), CancellationToken.None);
-
-        result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("Contact.Tag.Required");
-        repository.GetByTagCallCount.Should().Be(0);
+        return new Mapper(config);
     }
 }

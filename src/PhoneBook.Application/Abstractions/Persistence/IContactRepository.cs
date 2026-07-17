@@ -1,11 +1,10 @@
 using PhoneBook.Domain.Contacts;
-using PhoneBook.Domain.Shared;
 
 namespace PhoneBook.Application.Abstractions.Persistence;
 
 public interface IContactRepository
 {
-    Task<Result> AddAsync(
+    Task AddAsync(
         Contact contact,
         CancellationToken cancellationToken);
 
@@ -13,15 +12,22 @@ public interface IContactRepository
         ContactId id,
         CancellationToken cancellationToken);
 
-    Task<IReadOnlyCollection<Contact>> GetByTagAsync(
-        Tag tag,
+    Task<PagedData<Contact>> GetAllAsync(
+        int pageNumber,
+        int pageSize,
         CancellationToken cancellationToken);
 
-    Task<Result> UpdateAsync(
+    Task<PagedData<Contact>> GetByTagAsync(
+        Tag tag,
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken);
+
+    Task UpdateAsync(
         Contact contact,
         CancellationToken cancellationToken);
 
-    Task<bool> DeleteAsync(
+    Task DeleteAsync(
         ContactId id,
         CancellationToken cancellationToken);
 }

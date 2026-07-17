@@ -1,6 +1,5 @@
 using FluentAssertions;
 using PhoneBook.Domain.Contacts;
-using PhoneBook.Domain.Shared;
 
 namespace PhoneBook.Domain.UnitTests.Contacts;
 
@@ -18,10 +17,8 @@ public class PhoneNumberTests
     [InlineData("(0912) 123 4567")]
     public void Supported_format_should_normalize_to_canonical_value(string value)
     {
-        Result<PhoneNumber> result = PhoneNumber.Create(value);
-
-        result.IsSuccess.Should().BeTrue();
-        result.Value.Value.Should().Be("+989121234567");
+        PhoneNumber.Create(value).Value.Should().Be("+989121234567");
+        PhoneNumber.IsValid(value).Should().BeTrue();
     }
 
     [Theory]
@@ -32,32 +29,32 @@ public class PhoneNumberTests
     [InlineData("+9891212345678")]
     [InlineData("abc09121234567")]
     [InlineData("0912A234567")]
-    public void Invalid_format_should_fail(string value)
+    public void Invalid_format_should_throw(string value)
     {
-        Result<PhoneNumber> result = PhoneNumber.Create(value);
+        Action act = () => PhoneNumber.Create(value);
 
-        result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("Contact.PhoneNumber.Invalid");
+        act.Should().Throw<ArgumentException>();
+        PhoneNumber.IsValid(value).Should().BeFalse();
     }
 
     [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public void Missing_value_should_fail(string? value)
+    public void Missing_value_should_throw(string? value)
     {
-        Result<PhoneNumber> result = PhoneNumber.Create(value);
+        Action act = () => PhoneNumber.Create(value);
 
-        result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("Contact.PhoneNumber.Required");
+        act.Should().Throw<ArgumentException>();
+        PhoneNumber.IsValid(value).Should().BeFalse();
     }
 
     [Fact]
     public void Equivalent_formats_should_produce_equal_values()
     {
-        PhoneNumber local = PhoneNumber.Create("0912-123-4567").Value;
-        PhoneNumber international = PhoneNumber.Create("+989121234567").Value;
-
-        local.Equals(international).Should().BeTrue();
+        PhoneNumber.Create("0912-123-4567")
+            .Equals(PhoneNumber.Create("+989121234567"))
+            .Should()
+            .BeTrue();
     }
 }

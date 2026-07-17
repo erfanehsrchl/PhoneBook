@@ -1,11 +1,11 @@
-using PhoneBook.Application.Abstractions.Messaging;
+using MediatR;
 using PhoneBook.Application.Contacts.Common;
 
 namespace PhoneBook.Application.Contacts.Update;
 
-public record UpdateContactCommand(
+public sealed record UpdateContactCommand(
     Guid ContactId,
     string? FirstName,
     string? LastName,
     string? PhoneNumber,
-    string? Tag) : ICommand<ContactResponse>;
+    string? Tag) : IRequest<ContactResponse>;

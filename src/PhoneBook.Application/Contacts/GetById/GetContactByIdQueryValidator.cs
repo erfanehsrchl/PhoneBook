@@ -7,6 +7,7 @@ public class GetContactByIdQueryValidator : AbstractValidator<GetContactByIdQuer
     public GetContactByIdQueryValidator()
     {
         RuleFor(query => query.ContactId)
-            .NotEmpty();
+            .NotEmpty()
+            .WithMessage("Contact ID must not be empty.");
     }
 }

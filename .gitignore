@@ -29,6 +29,10 @@ coverage.*
 *.trx
 
 # User-specific and temporary files
+.env
+.env.*
+!.env.example
+docker-compose.override.yml
 *.rsuser
 *.userprefs
 *.pidb

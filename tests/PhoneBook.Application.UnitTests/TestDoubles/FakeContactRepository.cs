@@ -1,26 +1,29 @@
 using PhoneBook.Application.Abstractions.Persistence;
 using PhoneBook.Domain.Contacts;
-using PhoneBook.Domain.Shared;
 
 namespace PhoneBook.Application.UnitTests.TestDoubles;
 
 internal class FakeContactRepository : IContactRepository
 {
-    public Result AddResult { get; set; } = Result.Success();
+    public Exception? AddException { get; set; }
 
-    public Result UpdateResult { get; set; } = Result.Success();
+    public Exception? UpdateException { get; set; }
 
-    public bool DeleteResult { get; set; } = true;
+    public Exception? DeleteException { get; set; }
 
     public Contact? ContactToReturn { get; set; }
 
     public IReadOnlyCollection<Contact> ContactsByTag { get; set; } = [];
+
+    public IReadOnlyCollection<Contact> AllContacts { get; set; } = [];
 
     public int AddCallCount { get; private set; }
 
     public int GetByIdCallCount { get; private set; }
 
     public int GetByTagCallCount { get; private set; }
+
+    public int GetAllCallCount { get; private set; }
 
     public int UpdateCallCount { get; private set; }
 
@@ -32,22 +35,20 @@ internal class FakeContactRepository : IContactRepository
 
     public Tag? RequestedTag { get; private set; }
 
-    public CancellationToken AddCancellationToken { get; private set; }
+    public int RequestedPageNumber { get; private set; }
 
-    public CancellationToken GetByIdCancellationToken { get; private set; }
+    public int RequestedPageSize { get; private set; }
 
-    public CancellationToken GetByTagCancellationToken { get; private set; }
+    public CancellationToken CapturedCancellationToken { get; private set; }
 
-    public CancellationToken UpdateCancellationToken { get; private set; }
-
-    public CancellationToken DeleteCancellationToken { get; private set; }
-
-    public Task<Result> AddAsync(Contact contact, CancellationToken cancellationToken)
+    public Task AddAsync(Contact contact, CancellationToken cancellationToken)
     {
         AddCallCount++;
         AddedContact = contact;
-        AddCancellationToken = cancellationToken;
-        return Task.FromResult(AddResult);
+        CapturedCancellationToken = cancellationToken;
+        return AddException is null
+            ? Task.CompletedTask
+            : Task.FromException(AddException);
     }
 
     public Task<Contact?> GetByIdAsync(
@@ -55,32 +56,60 @@ internal class FakeContactRepository : IContactRepository
         CancellationToken cancellationToken)
     {
         GetByIdCallCount++;
-        GetByIdCancellationToken = cancellationToken;
+        CapturedCancellationToken = cancellationToken;
         return Task.FromResult(ContactToReturn);
     }
 
-    public Task<IReadOnlyCollection<Contact>> GetByTagAsync(
+    public Task<PagedData<Contact>> GetAllAsync(
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        GetAllCallCount++;
+        CapturePaging(pageNumber, pageSize, cancellationToken);
+        return Task.FromResult(
+            new PagedData<Contact>(AllContacts, pageNumber, pageSize, AllContacts.Count));
+    }
+
+    public Task<PagedData<Contact>> GetByTagAsync(
         Tag tag,
+        int pageNumber,
+        int pageSize,
         CancellationToken cancellationToken)
     {
         GetByTagCallCount++;
         RequestedTag = tag;
-        GetByTagCancellationToken = cancellationToken;
-        return Task.FromResult(ContactsByTag);
+        CapturePaging(pageNumber, pageSize, cancellationToken);
+        return Task.FromResult(
+            new PagedData<Contact>(ContactsByTag, pageNumber, pageSize, ContactsByTag.Count));
     }
 
-    public Task<Result> UpdateAsync(Contact contact, CancellationToken cancellationToken)
+    public Task UpdateAsync(Contact contact, CancellationToken cancellationToken)
     {
         UpdateCallCount++;
         UpdatedContact = contact;
-        UpdateCancellationToken = cancellationToken;
-        return Task.FromResult(UpdateResult);
+        CapturedCancellationToken = cancellationToken;
+        return UpdateException is null
+            ? Task.CompletedTask
+            : Task.FromException(UpdateException);
     }
 
-    public Task<bool> DeleteAsync(ContactId id, CancellationToken cancellationToken)
+    public Task DeleteAsync(ContactId id, CancellationToken cancellationToken)
     {
         DeleteCallCount++;
-        DeleteCancellationToken = cancellationToken;
-        return Task.FromResult(DeleteResult);
+        CapturedCancellationToken = cancellationToken;
+        return DeleteException is null
+            ? Task.CompletedTask
+            : Task.FromException(DeleteException);
+    }
+
+    private void CapturePaging(
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        RequestedPageNumber = pageNumber;
+        RequestedPageSize = pageSize;
+        CapturedCancellationToken = cancellationToken;
     }
 }

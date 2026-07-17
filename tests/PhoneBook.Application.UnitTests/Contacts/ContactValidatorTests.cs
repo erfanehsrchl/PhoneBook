@@ -2,6 +2,7 @@ using FluentAssertions;
 using FluentValidation.Results;
 using PhoneBook.Application.Contacts.Create;
 using PhoneBook.Application.Contacts.Delete;
+using PhoneBook.Application.Contacts.GetAll;
 using PhoneBook.Application.Contacts.GetById;
 using PhoneBook.Application.Contacts.GetByTag;
 using PhoneBook.Application.Contacts.Update;
@@ -141,7 +142,7 @@ public class ContactValidatorTests
     {
         GetContactsByTagQueryValidator validator = new();
 
-        ValidationResult result = validator.Validate(new GetContactsByTagQuery(tag));
+        ValidationResult result = validator.Validate(new GetContactsByTagQuery(tag, 1, 20));
 
         result.IsValid.Should().BeFalse();
     }
@@ -152,8 +153,50 @@ public class ContactValidatorTests
         GetContactsByTagQueryValidator validator = new();
 
         ValidationResult result = validator.Validate(
-            new GetContactsByTagQuery("Coworker"));
+            new GetContactsByTagQuery("Coworker", 1, 20));
 
         result.IsValid.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(0, 20)]
+    [InlineData(1, 0)]
+    [InlineData(1, 101)]
+    public void GetAll_validator_should_reject_invalid_pagination(
+        int pageNumber,
+        int pageSize)
+    {
+        GetContactsQueryValidator validator = new();
+
+        ValidationResult result = validator.Validate(
+            new GetContactsQuery(pageNumber, pageSize));
+
+        result.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public void GetAll_validator_should_accept_valid_pagination()
+    {
+        GetContactsQueryValidator validator = new();
+
+        ValidationResult result = validator.Validate(new GetContactsQuery(1, 100));
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(0, 20)]
+    [InlineData(1, 0)]
+    [InlineData(1, 101)]
+    public void GetByTag_validator_should_reject_invalid_pagination(
+        int pageNumber,
+        int pageSize)
+    {
+        GetContactsByTagQueryValidator validator = new();
+
+        ValidationResult result = validator.Validate(
+            new GetContactsByTagQuery("Coworker", pageNumber, pageSize));
+
+        result.IsValid.Should().BeFalse();
     }
 }

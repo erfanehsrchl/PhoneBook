@@ -1,5 +1,5 @@
-using PhoneBook.Application.Abstractions.Messaging;
+using MediatR;
 
 namespace PhoneBook.Application.Contacts.Delete;
 
-public record DeleteContactCommand(Guid ContactId) : ICommand;
+public sealed record DeleteContactCommand(Guid ContactId) : IRequest;

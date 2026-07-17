@@ -1,16 +1,40 @@
 using PhoneBook.Application;
+using Microsoft.AspNetCore.Mvc;
+using PhoneBook.Api.Contracts;
 using PhoneBook.Api.ExceptionHandling;
 using PhoneBook.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
+builder.Services.Configure<ApiBehaviorOptions>(options =>
+{
+    options.InvalidModelStateResponseFactory = _ =>
+        new BadRequestObjectResult(
+            new ApiResponse(
+                StatusCodes.Status400BadRequest,
+                "The request is invalid.",
+                "Request.Invalid"));
+});
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
-builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddExceptionHandler(options =>
+{
+    options.AllowStatusCode404Response = true;
+    options.ExceptionHandler = async httpContext =>
+    {
+        httpContext.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        await httpContext.Response.WriteAsJsonAsync(
+            new ApiResponse(
+                StatusCodes.Status500InternalServerError,
+                "An unexpected error occurred.",
+                "Server.UnexpectedError"),
+            httpContext.RequestAborted);
+    };
+});
 
 var app = builder.Build();
 

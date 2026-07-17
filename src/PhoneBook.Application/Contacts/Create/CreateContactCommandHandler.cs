@@ -1,78 +1,39 @@
-using PhoneBook.Application.Abstractions.Messaging;
+using MediatR;
+using MapsterMapper;
 using PhoneBook.Application.Abstractions.Persistence;
-using PhoneBook.Application.Abstractions.Time;
 using PhoneBook.Application.Contacts.Common;
 using PhoneBook.Domain.Contacts;
-using PhoneBook.Domain.Shared;
 
 namespace PhoneBook.Application.Contacts.Create;
 
 public class CreateContactCommandHandler
-    : ICommandHandler<CreateContactCommand, ContactResponse>
+    : IRequestHandler<CreateContactCommand, ContactResponse>
 {
     private readonly IContactRepository _contactRepository;
-    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly IMapper _mapper;
 
     public CreateContactCommandHandler(
         IContactRepository contactRepository,
-        IDateTimeProvider dateTimeProvider)
+        IMapper mapper)
     {
         _contactRepository = contactRepository;
-        _dateTimeProvider = dateTimeProvider;
+        _mapper = mapper;
     }
 
-    public async Task<Result<ContactResponse>> Handle(
+    public async Task<ContactResponse> Handle(
         CreateContactCommand request,
         CancellationToken cancellationToken)
     {
-        Result<FirstName> firstNameResult = FirstName.Create(request.FirstName);
+        var now = DateTime.UtcNow;
+        var contact = Contact.Create(
+            ContactId.New(),
+            request.FirstName,
+            request.LastName,
+            request.PhoneNumber,
+            request.Tag,
+            now);
 
-        if (firstNameResult.IsFailure)
-        {
-            return Result<ContactResponse>.Failure(firstNameResult.Error);
-        }
-
-        Result<LastName> lastNameResult = LastName.Create(request.LastName);
-
-        if (lastNameResult.IsFailure)
-        {
-            return Result<ContactResponse>.Failure(lastNameResult.Error);
-        }
-
-        Result<PhoneNumber> phoneNumberResult = PhoneNumber.Create(request.PhoneNumber);
-
-        if (phoneNumberResult.IsFailure)
-        {
-            return Result<ContactResponse>.Failure(phoneNumberResult.Error);
-        }
-
-        Result<Tag> tagResult = Tag.Create(request.Tag);
-
-        if (tagResult.IsFailure)
-        {
-            return Result<ContactResponse>.Failure(tagResult.Error);
-        }
-
-        ContactId contactId = ContactId.New();
-        Result<Contact> contactResult = Contact.Create(
-            contactId,
-            firstNameResult.Value.Value,
-            lastNameResult.Value.Value,
-            phoneNumberResult.Value.Value,
-            tagResult.Value.Value,
-            _dateTimeProvider.UtcNow);
-
-        if (contactResult.IsFailure)
-        {
-            return Result<ContactResponse>.Failure(contactResult.Error);
-        }
-
-        Result addResult = await _contactRepository.AddAsync(
-            contactResult.Value,
-            cancellationToken);
-
-        return addResult.IsFailure
-            ? Result<ContactResponse>.Failure(addResult.Error)
-            : Result<ContactResponse>.Success(contactResult.Value.ToResponse());
+        await _contactRepository.AddAsync(contact, cancellationToken);
+        return _mapper.Map<ContactResponse>(contact);
     }
 }

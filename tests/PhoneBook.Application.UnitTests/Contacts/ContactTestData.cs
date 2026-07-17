@@ -21,7 +21,7 @@ internal static class ContactTestData
         string tag = "Coworker",
         DateTime? createdAtUtc = null)
     {
-        ContactId contactId = ContactId.Create(id ?? ContactGuid).Value;
+        ContactId contactId = new(id ?? ContactGuid);
 
         return Contact.Create(
             contactId,
@@ -29,6 +29,6 @@ internal static class ContactTestData
             lastName,
             phoneNumber,
             tag,
-            createdAtUtc ?? CreatedAtUtc).Value;
+            createdAtUtc ?? CreatedAtUtc);
     }
 }

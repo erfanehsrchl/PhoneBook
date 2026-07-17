@@ -1,5 +1,3 @@
-using PhoneBook.Domain.Shared;
-
 namespace PhoneBook.Domain.Contacts;
 
 public record Tag
@@ -13,18 +11,23 @@ public record Tag
 
     public string Value { get; }
 
-    public static Result<Tag> Create(string? value)
+    public static Tag Create(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
         {
-            return Result<Tag>.Failure(ContactErrors.TagRequired);
+            throw new ArgumentException("Tag is required.", nameof(value));
         }
 
         string normalizedValue = value.Trim();
 
-        return normalizedValue.Length > MaximumLength
-            ? Result<Tag>.Failure(ContactErrors.TagTooLong)
-            : Result<Tag>.Success(new Tag(normalizedValue));
+        if (normalizedValue.Length > MaximumLength)
+        {
+            throw new ArgumentException(
+                "Tag must not exceed 100 characters.",
+                nameof(value));
+        }
+
+        return new Tag(normalizedValue);
     }
 
     public virtual bool Equals(Tag? other)

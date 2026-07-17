@@ -1,57 +1,40 @@
 using FluentAssertions;
 using PhoneBook.Domain.Contacts;
-using PhoneBook.Domain.Shared;
 
 namespace PhoneBook.Domain.UnitTests.Contacts;
 
 public class FirstNameTests
 {
     [Fact]
-    public void Valid_value_should_succeed()
+    public void Valid_value_should_be_trimmed()
     {
-        Result<FirstName> result = FirstName.Create("Erfan");
-
-        result.IsSuccess.Should().BeTrue();
-        result.Value.Value.Should().Be("Erfan");
-    }
-
-    [Fact]
-    public void Surrounding_whitespace_should_be_trimmed()
-    {
-        Result<FirstName> result = FirstName.Create("  Erfan  ");
-
-        result.Value.Value.Should().Be("Erfan");
+        FirstName.Create("  Erfan  ").Value.Should().Be("Erfan");
     }
 
     [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public void Missing_value_should_fail(string? value)
+    public void Missing_value_should_throw(string? value)
     {
-        Result<FirstName> result = FirstName.Create(value);
+        Action act = () => FirstName.Create(value);
 
-        result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("Contact.FirstName.Required");
+        act.Should().Throw<ArgumentException>().WithMessage("First name is required.*");
     }
 
     [Fact]
-    public void Value_longer_than_100_characters_should_fail()
+    public void Value_longer_than_100_characters_should_throw()
     {
-        Result<FirstName> result = FirstName.Create(new string('a', 101));
+        Action act = () => FirstName.Create(new string('a', 101));
 
-        result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("Contact.FirstName.TooLong");
+        act.Should().Throw<ArgumentException>();
     }
 
     [Theory]
     [InlineData("عرفان")]
     [InlineData("Łukasz")]
-    public void Unicode_name_should_succeed(string value)
+    public void Unicode_name_should_be_preserved(string value)
     {
-        Result<FirstName> result = FirstName.Create(value);
-
-        result.IsSuccess.Should().BeTrue();
-        result.Value.Value.Should().Be(value);
+        FirstName.Create(value).Value.Should().Be(value);
     }
 }

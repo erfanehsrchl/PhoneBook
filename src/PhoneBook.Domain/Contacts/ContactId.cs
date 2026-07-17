@@ -1,11 +1,14 @@
-using PhoneBook.Domain.Shared;
-
 namespace PhoneBook.Domain.Contacts;
 
 public readonly record struct ContactId
 {
-    private ContactId(Guid value)
+    public ContactId(Guid value)
     {
+        if (value == Guid.Empty)
+        {
+            throw new ArgumentException("Contact ID must not be empty.", nameof(value));
+        }
+
         Value = value;
     }
 
@@ -16,10 +19,4 @@ public readonly record struct ContactId
         return new ContactId(Guid.NewGuid());
     }
 
-    public static Result<ContactId> Create(Guid value)
-    {
-        return value == Guid.Empty
-            ? Result<ContactId>.Failure(ContactErrors.IdEmpty)
-            : Result<ContactId>.Success(new ContactId(value));
-    }
 }

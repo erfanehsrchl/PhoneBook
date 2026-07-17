@@ -1,9 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using PhoneBook.Application.Abstractions.Persistence;
-using PhoneBook.Application.Abstractions.Time;
 using PhoneBook.Infrastructure.Persistence;
-using PhoneBook.Infrastructure.Time;
 
 namespace PhoneBook.Infrastructure;
 
@@ -14,7 +12,6 @@ public static class DependencyInjection
         IConfiguration configuration)
     {
         services.AddSingleton<IContactRepository, InMemoryContactRepository>();
-        services.AddSingleton<IDateTimeProvider, SystemDateTimeProvider>();
 
         return services;
     }

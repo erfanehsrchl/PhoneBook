@@ -1,7 +1,6 @@
 using FluentValidation;
 using FluentValidation.Results;
 using MediatR;
-using PhoneBook.Domain.Shared;
 
 namespace PhoneBook.Application.Behaviors;
 
@@ -30,23 +29,17 @@ public class ValidationBehavior<TRequest, TResponse>
         ValidationResult[] validationResults = await Task.WhenAll(
             _validators.Select(validator =>
                 validator.ValidateAsync(context, cancellationToken)));
-
-        ValidationFailure? firstFailure = validationResults
+        ValidationFailure[] failures = validationResults
             .SelectMany(result => result.Errors)
             .Where(failure => failure is not null)
             .DistinctBy(failure => new { failure.PropertyName, failure.ErrorMessage })
-            .FirstOrDefault();
+            .ToArray();
 
-        if (firstFailure is null)
+        if (failures.Length > 0)
         {
-            return await next(cancellationToken);
+            throw new ValidationException(failures);
         }
 
-        Error error = new(
-            $"Validation.{firstFailure.PropertyName}",
-            firstFailure.ErrorMessage,
-            ErrorType.Validation);
-
-        return ValidationResultFactory.Create<TResponse>(error);
+        return await next(cancellationToken);
     }
 }

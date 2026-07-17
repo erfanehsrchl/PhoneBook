@@ -1,6 +1,6 @@
-using PhoneBook.Application.Abstractions.Messaging;
+using MediatR;
 using PhoneBook.Application.Contacts.Common;
 
 namespace PhoneBook.Application.Contacts.GetById;
 
-public record GetContactByIdQuery(Guid ContactId) : IQuery<ContactResponse>;
+public sealed record GetContactByIdQuery(Guid ContactId) : IRequest<ContactResponse>;

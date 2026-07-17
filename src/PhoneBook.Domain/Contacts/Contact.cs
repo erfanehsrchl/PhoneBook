@@ -1,5 +1,4 @@
 using PhoneBook.Domain.Abstractions;
-using PhoneBook.Domain.Shared;
 
 namespace PhoneBook.Domain.Contacts;
 
@@ -35,7 +34,7 @@ public class Contact : AggregateRoot<ContactId>, IAuditableEntity
 
     public DateTime? UpdatedAtUtc { get; private set; }
 
-    public static Result<Contact> Create(
+    public static Contact Create(
         ContactId id,
         string? firstName,
         string? lastName,
@@ -43,111 +42,39 @@ public class Contact : AggregateRoot<ContactId>, IAuditableEntity
         string? tag,
         DateTime createdAtUtc)
     {
-        if (id.Value == Guid.Empty)
-        {
-            return Result<Contact>.Failure(ContactErrors.IdEmpty);
-        }
+        ValidateCreationTimestamp(createdAtUtc);
 
-        Result<FirstName> firstNameResult = Contacts.FirstName.Create(firstName);
-
-        if (firstNameResult.IsFailure)
-        {
-            return Result<Contact>.Failure(firstNameResult.Error);
-        }
-
-        Result<LastName> lastNameResult = Contacts.LastName.Create(lastName);
-
-        if (lastNameResult.IsFailure)
-        {
-            return Result<Contact>.Failure(lastNameResult.Error);
-        }
-
-        Result<PhoneNumber> phoneNumberResult = Contacts.PhoneNumber.Create(phoneNumber);
-
-        if (phoneNumberResult.IsFailure)
-        {
-            return Result<Contact>.Failure(phoneNumberResult.Error);
-        }
-
-        Result<Tag> tagResult = Contacts.Tag.Create(tag);
-
-        if (tagResult.IsFailure)
-        {
-            return Result<Contact>.Failure(tagResult.Error);
-        }
-
-        if (createdAtUtc.Kind != DateTimeKind.Utc)
-        {
-            return Result<Contact>.Failure(ContactErrors.TimestampMustBeUtc);
-        }
-
-        Contact contact = new(
+        return new Contact(
             id,
-            firstNameResult.Value,
-            lastNameResult.Value,
-            phoneNumberResult.Value,
-            tagResult.Value,
+            Contacts.FirstName.Create(firstName),
+            Contacts.LastName.Create(lastName),
+            Contacts.PhoneNumber.Create(phoneNumber),
+            Contacts.Tag.Create(tag),
             createdAtUtc,
             null);
-
-        return Result<Contact>.Success(contact);
     }
 
-    public Result Update(
+    public void Update(
         string? firstName,
         string? lastName,
         string? phoneNumber,
         string? tag,
         DateTime updatedAtUtc)
     {
-        Result<FirstName> firstNameResult = Contacts.FirstName.Create(firstName);
+        FirstName newFirstName = Contacts.FirstName.Create(firstName);
+        LastName newLastName = Contacts.LastName.Create(lastName);
+        PhoneNumber newPhoneNumber = Contacts.PhoneNumber.Create(phoneNumber);
+        Tag newTag = Contacts.Tag.Create(tag);
+        ValidateUpdateTimestamp(updatedAtUtc);
 
-        if (firstNameResult.IsFailure)
-        {
-            return Result.Failure(firstNameResult.Error);
-        }
-
-        Result<LastName> lastNameResult = Contacts.LastName.Create(lastName);
-
-        if (lastNameResult.IsFailure)
-        {
-            return Result.Failure(lastNameResult.Error);
-        }
-
-        Result<PhoneNumber> phoneNumberResult = Contacts.PhoneNumber.Create(phoneNumber);
-
-        if (phoneNumberResult.IsFailure)
-        {
-            return Result.Failure(phoneNumberResult.Error);
-        }
-
-        Result<Tag> tagResult = Contacts.Tag.Create(tag);
-
-        if (tagResult.IsFailure)
-        {
-            return Result.Failure(tagResult.Error);
-        }
-
-        if (updatedAtUtc.Kind != DateTimeKind.Utc)
-        {
-            return Result.Failure(ContactErrors.TimestampMustBeUtc);
-        }
-
-        if (updatedAtUtc < CreatedAtUtc)
-        {
-            return Result.Failure(ContactErrors.TimestampBeforeCreated);
-        }
-
-        FirstName = firstNameResult.Value;
-        LastName = lastNameResult.Value;
-        PhoneNumber = phoneNumberResult.Value;
-        Tag = tagResult.Value;
+        FirstName = newFirstName;
+        LastName = newLastName;
+        PhoneNumber = newPhoneNumber;
+        Tag = newTag;
         UpdatedAtUtc = updatedAtUtc;
-
-        return Result.Success();
     }
 
-    public static Result<Contact> Rehydrate(
+    public static Contact Rehydrate(
         ContactId id,
         FirstName firstName,
         LastName lastName,
@@ -160,24 +87,26 @@ public class Contact : AggregateRoot<ContactId>, IAuditableEntity
         ArgumentNullException.ThrowIfNull(lastName);
         ArgumentNullException.ThrowIfNull(phoneNumber);
         ArgumentNullException.ThrowIfNull(tag);
+        ValidateCreationTimestamp(createdAtUtc);
 
-        if (id.Value == Guid.Empty)
+        if (updatedAtUtc is not null)
         {
-            return Result<Contact>.Failure(ContactErrors.IdEmpty);
+            if (updatedAtUtc.Value.Kind != DateTimeKind.Utc)
+            {
+                throw new ArgumentException(
+                    "Contact timestamps must be in UTC.",
+                    nameof(updatedAtUtc));
+            }
+
+            if (updatedAtUtc.Value < createdAtUtc)
+            {
+                throw new ArgumentException(
+                    "The update timestamp must not be earlier than the creation timestamp.",
+                    nameof(updatedAtUtc));
+            }
         }
 
-        if (createdAtUtc.Kind != DateTimeKind.Utc
-            || updatedAtUtc is { Kind: not DateTimeKind.Utc })
-        {
-            return Result<Contact>.Failure(ContactErrors.TimestampMustBeUtc);
-        }
-
-        if (updatedAtUtc < createdAtUtc)
-        {
-            return Result<Contact>.Failure(ContactErrors.TimestampBeforeCreated);
-        }
-
-        Contact contact = new(
+        return new Contact(
             id,
             firstName,
             lastName,
@@ -185,7 +114,32 @@ public class Contact : AggregateRoot<ContactId>, IAuditableEntity
             tag,
             createdAtUtc,
             updatedAtUtc);
+    }
 
-        return Result<Contact>.Success(contact);
+    private static void ValidateCreationTimestamp(DateTime createdAtUtc)
+    {
+        if (createdAtUtc.Kind != DateTimeKind.Utc)
+        {
+            throw new ArgumentException(
+                "Contact timestamps must be in UTC.",
+                nameof(createdAtUtc));
+        }
+    }
+
+    private void ValidateUpdateTimestamp(DateTime updatedAtUtc)
+    {
+        if (updatedAtUtc.Kind != DateTimeKind.Utc)
+        {
+            throw new ArgumentException(
+                "Contact timestamps must be in UTC.",
+                nameof(updatedAtUtc));
+        }
+
+        if (updatedAtUtc < CreatedAtUtc)
+        {
+            throw new ArgumentException(
+                "The update timestamp must not be earlier than the creation timestamp.",
+                nameof(updatedAtUtc));
+        }
     }
 }

@@ -1,9 +1,13 @@
+using System.Text.Json;
+using FluentValidation;
 using Microsoft.AspNetCore.Diagnostics;
+using PhoneBook.Api.Contracts;
+using PhoneBook.Application.Common.Exceptions;
 
 namespace PhoneBook.Api.ExceptionHandling;
 
 /// <summary>
-/// Converts unexpected exceptions into safe RFC 7807 responses.
+/// Converts application and unexpected exceptions into safe API error responses.
 /// </summary>
 public class GlobalExceptionHandler : IExceptionHandler
 {
@@ -24,22 +28,69 @@ public class GlobalExceptionHandler : IExceptionHandler
         Exception exception,
         CancellationToken cancellationToken)
     {
-        _logger.LogError(
-            exception,
-            "An unexpected exception occurred while processing {RequestPath}.",
-            httpContext.Request.Path);
+        if (exception is ValidationException validationException)
+        {
+            await WriteValidationResponseAsync(
+                httpContext,
+                validationException,
+                cancellationToken);
+            return true;
+        }
 
-        IResult response = Results.Problem(
-            statusCode: StatusCodes.Status500InternalServerError,
-            title: "Internal Server Error",
-            detail: "An unexpected error occurred.",
-            instance: httpContext.Request.Path,
-            extensions: new Dictionary<string, object?>
+        int statusCode;
+        string message;
+        string errorCode;
+
+        if (exception is ApplicationExceptionBase applicationException)
+        {
+            statusCode = applicationException switch
             {
-                ["code"] = "Server.Unexpected"
-            });
+                NotFoundException => StatusCodes.Status404NotFound,
+                ConflictException => StatusCodes.Status409Conflict,
+                BusinessRuleException => StatusCodes.Status422UnprocessableEntity,
+                _ => StatusCodes.Status500InternalServerError
+            };
+            message = applicationException.Message;
+            errorCode = applicationException.Code;
+        }
+        else
+        {
+            statusCode = StatusCodes.Status500InternalServerError;
+            message = "An unexpected error occurred.";
+            errorCode = "Server.UnexpectedError";
+            _logger.LogError(
+                exception,
+                "An unexpected exception occurred while processing {RequestPath}.",
+                httpContext.Request.Path);
+        }
 
-        await response.ExecuteAsync(httpContext);
+        httpContext.Response.StatusCode = statusCode;
+        await httpContext.Response.WriteAsJsonAsync(
+            new ApiResponse(statusCode, message, errorCode),
+            cancellationToken);
         return true;
+    }
+
+    private static async Task WriteValidationResponseAsync(
+        HttpContext httpContext,
+        ValidationException exception,
+        CancellationToken cancellationToken)
+    {
+        Dictionary<string, string[]> errors = exception.Errors
+            .GroupBy(failure => JsonNamingPolicy.CamelCase.ConvertName(failure.PropertyName))
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .Select(failure => failure.ErrorMessage)
+                    .Distinct()
+                    .ToArray());
+
+        httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+        await httpContext.Response.WriteAsJsonAsync(
+            new ValidationApiResponse(
+                StatusCodes.Status400BadRequest,
+                "One or more validation errors occurred.",
+                errors),
+            cancellationToken);
     }
 }

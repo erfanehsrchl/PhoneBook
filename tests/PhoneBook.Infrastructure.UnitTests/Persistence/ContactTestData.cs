@@ -18,7 +18,7 @@ internal static class ContactTestData
         string firstName = "Erfan",
         string lastName = "Ahmadi")
     {
-        ContactId contactId = ContactId.Create(Guid.Parse(id)).Value;
+        ContactId contactId = new(Guid.Parse(id));
 
         return Contact.Create(
             contactId,
@@ -26,6 +26,6 @@ internal static class ContactTestData
             lastName,
             phoneNumber,
             tag,
-            createdAtUtc ?? CreatedAtUtc).Value;
+            createdAtUtc ?? CreatedAtUtc);
     }
 }

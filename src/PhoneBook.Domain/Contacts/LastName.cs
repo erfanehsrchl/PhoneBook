@@ -1,5 +1,3 @@
-using PhoneBook.Domain.Shared;
-
 namespace PhoneBook.Domain.Contacts;
 
 public record LastName
@@ -13,17 +11,22 @@ public record LastName
 
     public string Value { get; }
 
-    public static Result<LastName> Create(string? value)
+    public static LastName Create(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
         {
-            return Result<LastName>.Failure(ContactErrors.LastNameRequired);
+            throw new ArgumentException("Last name is required.", nameof(value));
         }
 
         string normalizedValue = value.Trim();
 
-        return normalizedValue.Length > MaximumLength
-            ? Result<LastName>.Failure(ContactErrors.LastNameTooLong)
-            : Result<LastName>.Success(new LastName(normalizedValue));
+        if (normalizedValue.Length > MaximumLength)
+        {
+            throw new ArgumentException(
+                "Last name must not exceed 100 characters.",
+                nameof(value));
+        }
+
+        return new LastName(normalizedValue);
     }
 }

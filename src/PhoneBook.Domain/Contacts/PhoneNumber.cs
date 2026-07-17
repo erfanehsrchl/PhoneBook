@@ -1,5 +1,4 @@
 using System.Text;
-using PhoneBook.Domain.Shared;
 
 namespace PhoneBook.Domain.Contacts;
 
@@ -15,18 +14,29 @@ public record PhoneNumber
 
     public string Value { get; }
 
-    public static Result<PhoneNumber> Create(string? value)
+    public static PhoneNumber Create(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
         {
-            return Result<PhoneNumber>.Failure(ContactErrors.PhoneNumberRequired);
+            throw new ArgumentException("Phone number is required.", nameof(value));
         }
 
         string normalizedValue = Normalize(value.Trim());
 
-        return IsCanonical(normalizedValue)
-            ? Result<PhoneNumber>.Success(new PhoneNumber(normalizedValue))
-            : Result<PhoneNumber>.Failure(ContactErrors.PhoneNumberInvalid);
+        if (!IsCanonical(normalizedValue))
+        {
+            throw new ArgumentException(
+                "Phone number must be a valid Iranian mobile number.",
+                nameof(value));
+        }
+
+        return new PhoneNumber(normalizedValue);
+    }
+
+    public static bool IsValid(string? value)
+    {
+        return !string.IsNullOrWhiteSpace(value)
+            && IsCanonical(Normalize(value.Trim()));
     }
 
     private static string Normalize(string value)
